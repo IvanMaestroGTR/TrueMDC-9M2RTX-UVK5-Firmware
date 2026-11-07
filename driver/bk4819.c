@@ -47,6 +47,11 @@ static const uint8_t DTMF_TONE1_GAIN = 65;
 static const uint8_t DTMF_TONE2_GAIN = 93;
 static const uint8_t MDC_FSK_TX_GAIN = 96;  // FSK gain for MDC1200 TX (configurable: 0-127, default 96)
 
+// SysTick ticks per 1200-baud symbol. Nominal is 40000 @ 48 MHz.
+// Measured +0.5% slow on one radio, so start at 40000 * 1200/1194 ~= 39800.
+// Retune: new = old * 1200 / measured_baud
+#define MDC_TX_BIT_TICKS   39870u
+
 #ifdef ENABLE_MDC1200
 static bool BK4819_IsFleetSyncPTTIDMode(void)
 {
@@ -2494,40 +2499,46 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
      * register-write overhead inside the symbol interval.
      */
     {
-        const uint32_t bit_period_ticks = 40000u;
-        const uint32_t reload = SysTick->LOAD + 1u;
+        const uint32_t bit_ticks_q8 = MDC_TX_BIT_TICKS << 8;
+        const uint32_t reload       = SysTick->LOAD + 1u;
+        const uint16_t reg71_1200   = scale_freq(1200u);
+        const uint16_t reg71_1800   = scale_freq(1800u);
+        const uint32_t primask      = __get_PRIMASK();
+        uint32_t acc_q8 = 0;
+        uint32_t last;
+        uint8_t  cur_bit = 0;            // preloaded tone is 1800 Hz (bit 0)
         unsigned int byte_index;
-        uint16_t current_tone_frequency = 1800u;
+
+        __disable_irq();                 // ~190 ms, no ISR jitter
+        last = SysTick->VAL;
 
         for (byte_index = 0; byte_index < combined_size; byte_index++) {
             int bit_index;
-
             for (bit_index = 7; bit_index >= 0; bit_index--) {
                 const uint8_t bit = (combined_packet[byte_index] >> bit_index) & 1u;
-                const uint16_t tone_frequency = bit ? 1200u : 1800u;
-                const uint32_t symbol_start_tick = SysTick->VAL;
 
-                /*
-                 * REG_71 only needs updating when the FFSK symbol changes.
-                 * Avoiding redundant writes reduces software-induced timing
-                 * jitter while preserving the 1200-baud symbol clock.
-                 */
-                if (tone_frequency != current_tone_frequency) {
-                    BK4819_WriteRegister(BK4819_REG_71, scale_freq(tone_frequency));
-                    current_tone_frequency = tone_frequency;
+                if (bit != cur_bit) {
+                    BK4819_WriteRegister(BK4819_REG_71, bit ? reg71_1200 : reg71_1800);
+                    cur_bit = bit;
                 }
 
+                // Drift-free wait: leftover time carries into the next symbol.
                 for (;;) {
-                    const uint32_t current_tick = SysTick->VAL;
-                    const uint32_t elapsed = (symbol_start_tick >= current_tick)
-                        ? (symbol_start_tick - current_tick)
-                        : (symbol_start_tick + (reload - current_tick));
-
-                    if (elapsed >= bit_period_ticks)
+                    const uint32_t now = SysTick->VAL;
+                    const uint32_t d = (last >= now) ? (last - now)
+                                                     : (last + reload - now);
+                    last = now;
+                    acc_q8 += d << 8;
+                    if (acc_q8 >= bit_ticks_q8) {
+                        acc_q8 -= bit_ticks_q8;
                         break;
+                    }
                 }
             }
         }
+
+        if (!primask)
+            __enable_irq();
     }
 
     // Stop the tone generator and restore the normal PTT transmit audio path.
