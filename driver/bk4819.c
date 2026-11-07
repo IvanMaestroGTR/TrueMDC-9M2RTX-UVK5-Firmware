@@ -26,6 +26,7 @@
 #include "gpio.h"
 #include "system.h"
 #include "systick.h"
+#include "ARMCM0.h"
 
 #ifdef ENABLE_MDC1200
 #include "app/mdc1200.h"
@@ -45,6 +46,11 @@ BK4819_FilterBandwidth_t m_bandwidth = BK4819_FILTER_BW_NARROW;
 static const uint8_t DTMF_TONE1_GAIN = 65;
 static const uint8_t DTMF_TONE2_GAIN = 93;
 static const uint8_t MDC_FSK_TX_GAIN = 96;  // FSK gain for MDC1200 TX (configurable: 0-127, default 96)
+
+// SysTick ticks per 1200-baud symbol. Nominal is 40000 @ 48 MHz.
+// Measured +0.5% slow on one radio, so start at 40000 * 1200/1194 ~= 39800.
+// Retune: new = old * 1200 / measured_baud
+#define MDC_TX_BIT_TICKS   39870u
 
 #ifdef ENABLE_MDC1200
 static bool BK4819_IsFleetSyncPTTIDMode(void)
@@ -2419,131 +2425,128 @@ static void BK4819_send_FSK_packet(const uint8_t *packet, unsigned int size)
     BK4819_WriteRegister(0x58, 0);
 }
 
-    void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id, const uint8_t preamble_duration)
+void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id, const uint8_t preamble_duration)
+{
+    uint16_t saved_reg30;
+    uint8_t packet[42];
+    uint8_t combined_packet[256];
+    unsigned int combined_size = 0;
+    const unsigned int preamble_cycles = (preamble_duration == 0u) ? 1u : preamble_duration;
+
+    // Keep the existing MDC1200 encoder and its output byte-for-byte unchanged.
+    const unsigned int mdc_size = MDC1200_encode_single_packet(packet, op, arg, id);
+
+    // Keep the existing configurable Motorola-style software preamble unchanged.
     {
-        uint16_t fsk_reg59;
-        uint8_t  packet[42];
-        uint8_t  combined_packet[256];  // Large buffer for preamble (up to 10 cycles) + MDC
-        unsigned int combined_size = 0;
-        
-        // Create the MDC1200 packet
-        const unsigned int mdc_size = MDC1200_encode_single_packet(packet, op, arg, id);
-        
-        // Build preamble: alternating 1800Hz and 1200Hz for N cycles
-        // 1800Hz = 0x00 (space), 1200Hz = 0xFF (mark)
-        {
-            unsigned int preamble_cycle; //cool motorola long preamble
-            
-            // Build preamble in combined buffer
-            for (preamble_cycle = 0; preamble_cycle < preamble_duration; preamble_cycle++) {
-                // First 1800Hz is longer to match Motorola spec (3 bytes = ~20ms for short preamble)
-                // Subsequent cycles are normal (4 bytes = ~25ms)
-                unsigned int first_1800_size = (preamble_cycle == 0) ? 1 : 4;
-                
-                // Add 1800Hz (0x00) - first is 3 bytes, rest are 4 bytes
-                memset(combined_packet + combined_size, 0x00, first_1800_size);
-                combined_size += first_1800_size;
-                
-                // Add 1200Hz (0xFF) for 20ms = 3 bytes (immediately after, no gap)
-                memset(combined_packet + combined_size, 0xFF, 3);
-                combined_size += 3;
-            }
+        unsigned int preamble_cycle;
+
+        for (preamble_cycle = 0; preamble_cycle < preamble_cycles; preamble_cycle++) {
+            /*
+             * Use a full 32-symbol 1800 Hz lead-in for every preamble mode.
+             * The former 8-symbol first run was short enough that TX startup
+             * settling could consume much of it, making the first tone appear
+             * chopped on receiving radios. Keep the following 24-symbol
+             * 1200 Hz section and all subsequent configured cycles unchanged.
+             */
+            const unsigned int first_1800_size = 4u;
+
+            memset(combined_packet + combined_size, 0x00, first_1800_size);
+            combined_size += first_1800_size;
+
+            memset(combined_packet + combined_size, 0xFF, 3u);
+            combined_size += 3u;
         }
-        
-        // Append MDC packet immediately after preamble (no spacing)
-        memcpy(combined_packet + combined_size, packet, mdc_size);
-        combined_size += mdc_size;
+    }
 
-        // Setup FSK modem for entire combined transmission
-        BK4819_WriteRegister(0x58,
-            (1u << 13) |  // FSK TX mode: FFSK 1200/1800
-            (7u << 10) |  // FSK RX mode: FFSK 1200/1800
-            (0u << 8) |   // FSK RX gain
-            (0u << 6) |   // ???
-            (0u << 4) |   // FSK preamble type
-            (1u << 1) |   // FSK RX bandwidth
-            (1u << 0));   // FSK enable
-     
-        // Set tone frequencies
-        BK4819_WriteRegister(0x72, scale_freq(1200));  // tone-2 = 1200Hz
-        BK4819_WriteRegister(0x70,
-            (0u << 15) |  // TONE-1 disable
-            (0u << 8) |   // TONE-1 tuning
-            (1u << 7) |   // TONE-2 enable
-            (MDC_FSK_TX_GAIN << 0));  // TONE-2 gain (configurable)
+    // Append the encoded MDC packet without a gap.
+    memcpy(combined_packet + combined_size, packet, mdc_size);
+    combined_size += mdc_size;
 
-        // Setup FSK register 0x59
-        fsk_reg59 = (0u << 15) |  // clear TX FIFO
-                    (0u << 14) |  // clear RX FIFO
-                    (0u << 13) |  // scramble
-                    (0u << 12) |  // enable RX
-                    (0u << 11) |  // enable TX
-                    (0u << 10) |  // invert RX
-                    (0u << 9) |   // invert TX
-                    (0u << 8) |   // ???
-                    (0u << 4) |   // preamble length (minimum)
-                    (1u << 3) |   // sync length
-                    (0u << 0);    // ???
+    /*
+     * Raw FFSK transmit using the BK4819 Tone-1 generator.
+     *
+     * This deliberately does NOT enable the BK4819 FSK packet engine
+     * (REG_58/REG_59/REG_5A/REG_5B/REG_5F). Therefore the chip cannot
+     * prepend its own hardware preamble or sync bytes.
+     *
+     * Existing MDC byte stream is already differentially encoded by
+     * xor_modulation(). Transmit the resulting bits MSB-first, using the
+     * same tone convention as the software preamble:
+     *   bit 1 -> 1200 Hz (0xFF / mark)
+     *   bit 0 -> 1800 Hz (0x00 / space).
+     */
+    saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
+    BK4819_EnterTxMute();
 
-        // Sync bytes
-        BK4819_WriteRegister(0x5A, 0x0000);
-        BK4819_WriteRegister(0x5B, 0x0000);
+    BK4819_WriteRegister(BK4819_REG_70,
+                         BK4819_REG_70_ENABLE_TONE1 |
+                         ((MDC_FSK_TX_GAIN & 0x7Fu) << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
 
-        // CRC setting
-        BK4819_WriteRegister(0x5C, 0x5625);
+    /*
+     * Preload the first preamble symbol while TX is still muted. This avoids
+     * briefly transmitting a stale/default Tone-1 frequency when the carrier
+     * is unmuted. The first preamble byte is 0x00, so its first symbol is 1800 Hz.
+     */
+    BK4819_WriteRegister(BK4819_REG_71, scale_freq(1800u));
 
-        // Set packet length for entire combined packet
-        BK4819_WriteRegister(0x5D, ((combined_size - 1) << 8));
+    BK4819_EnableTXLink();
+    BK4819_ExitTxMute();
 
-        // Clear and release FIFO
-        BK4819_WriteRegister(0x59, (1u << 15) | (1u << 14) | fsk_reg59);
-        BK4819_WriteRegister(0x59, fsk_reg59);
+    /*
+     * SysTick runs at 48 MHz. 40,000 ticks = 833.333... us,
+     * i.e. the standard 1200-baud bit period. Timing each bit from
+     * immediately before its frequency-register write keeps the
+     * register-write overhead inside the symbol interval.
+     */
+    {
+        const uint32_t bit_ticks_q8 = MDC_TX_BIT_TICKS << 8;
+        const uint32_t reload       = SysTick->LOAD + 1u;
+        const uint16_t reg71_1200   = scale_freq(1200u);
+        const uint16_t reg71_1800   = scale_freq(1800u);
+        const uint32_t primask      = __get_PRIMASK();
+        uint32_t acc_q8 = 0;
+        uint32_t last;
+        uint8_t  cur_bit = 0;            // preloaded tone is 1800 Hz (bit 0)
+        unsigned int byte_index;
 
-        // Load the entire combined packet into the FIFO as-is.
-        // Load as 16-bit words, then handle any remaining byte.
-        {
-            unsigned int i;
-            const uint16_t *p = (const uint16_t *)combined_packet;
-            const uint8_t *p8 = combined_packet;
-            unsigned int load_size = combined_size;
-            
-            // Load all complete 16-bit words
-            for (i = 0; i < (load_size / 2); i++)
-                BK4819_WriteRegister(0x5F, p[i]);
-            
-            // If there's an odd byte remaining, load it as the low byte of a 16-bit word
-            if (load_size & 1) {
-                BK4819_WriteRegister(0x5F, (uint16_t)p8[load_size - 1]);
-            }
-        }
+        __disable_irq();                 // ~190 ms, no ISR jitter
+        last = SysTick->VAL;
 
-        // Enable TX interrupt
-        BK4819_WriteRegister(0x3F, BK4819_REG_3F_FSK_TX_FINISHED);
+        for (byte_index = 0; byte_index < combined_size; byte_index++) {
+            int bit_index;
+            for (bit_index = 7; bit_index >= 0; bit_index--) {
+                const uint8_t bit = (combined_packet[byte_index] >> bit_index) & 1u;
 
-        // Enable FSK TX
-        BK4819_WriteRegister(0x59, (1u << 11) | fsk_reg59);
+                if (bit != cur_bit) {
+                    BK4819_WriteRegister(BK4819_REG_71, bit ? reg71_1200 : reg71_1800);
+                    cur_bit = bit;
+                }
 
-        // Wait for TX to complete
-        {
-            unsigned int timeout = 500 / 4;  // Increased timeout for longer combined packet
-            while (timeout-- > 0) {
-                SYSTEM_DelayMs(4);
-                if (BK4819_ReadRegister(0x0C) & (1u << 0)) {
-                    BK4819_WriteRegister(0x02, 0);
-                    if (BK4819_ReadRegister(0x02) & BK4819_REG_02_FSK_TX_FINISHED)
-                        timeout = 0;
+                // Drift-free wait: leftover time carries into the next symbol.
+                for (;;) {
+                    const uint32_t now = SysTick->VAL;
+                    const uint32_t d = (last >= now) ? (last - now)
+                                                     : (last + reload - now);
+                    last = now;
+                    acc_q8 += d << 8;
+                    if (acc_q8 >= bit_ticks_q8) {
+                        acc_q8 -= bit_ticks_q8;
+                        break;
+                    }
                 }
             }
         }
 
-        // Cleanup
-        BK4819_WriteRegister(0x59, fsk_reg59);
-        BK4819_WriteRegister(0x3F, 0);
-        BK4819_WriteRegister(0x70, 0);
-        BK4819_WriteRegister(0x58, 0);
-
-        return;
+        if (!primask)
+            __enable_irq();
     }
+
+    // Stop the tone generator and restore the normal PTT transmit audio path.
+    BK4819_EnterTxMute();
+    BK4819_WriteRegister(BK4819_REG_70, 0);
+    BK4819_WriteRegister(BK4819_REG_30, saved_reg30);
+    BK4819_ExitTxMute();
+}
 
 #ifdef ENABLE_FLEETSYNC
     void BK4819_send_FleetSync(const uint16_t fleet, const uint16_t unit, const bool end_of_transmission)
