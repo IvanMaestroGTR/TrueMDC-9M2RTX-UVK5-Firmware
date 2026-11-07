@@ -183,8 +183,8 @@ unsigned int MDC1200_encode_single_packet(void *data, const uint8_t op, const ui
     uint16_t crc;
     uint8_t *p = (uint8_t *) data;
 
-    memcpy(p, mdc1200_pre_amble, sizeof(mdc1200_pre_amble));
-    p += sizeof(mdc1200_pre_amble);
+    // Motorola-reference TX framing is assembled in BK4819_send_MDC1200().
+    // Keep the encoder output starting at sync; do not prepend the legacy 0x00,0xFF bytes.
     memcpy(p, mdc1200_sync, sizeof(mdc1200_sync));
     p += sizeof(mdc1200_sync);
 
