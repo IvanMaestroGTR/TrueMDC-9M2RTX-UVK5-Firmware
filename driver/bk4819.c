@@ -2426,6 +2426,7 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
     uint8_t packet[42];
     uint8_t combined_packet[256];
     unsigned int combined_size = 0;
+    const unsigned int preamble_cycles = (preamble_duration == 0u) ? 1u : preamble_duration;
 
     // Keep the existing MDC1200 encoder and its output byte-for-byte unchanged.
     const unsigned int mdc_size = MDC1200_encode_single_packet(packet, op, arg, id);
@@ -2434,7 +2435,7 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
     {
         unsigned int preamble_cycle;
 
-        for (preamble_cycle = 0; preamble_cycle < preamble_duration; preamble_cycle++) {
+        for (preamble_cycle = 0; preamble_cycle < preamble_cycles; preamble_cycle++) {
             const unsigned int first_1800_size = (preamble_cycle == 0) ? 1u : 4u;
 
             memset(combined_packet + combined_size, 0x00, first_1800_size);
@@ -2456,10 +2457,11 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
      * (REG_58/REG_59/REG_5A/REG_5B/REG_5F). Therefore the chip cannot
      * prepend its own hardware preamble or sync bytes.
      *
-     * Existing MDC byte stream convention:
-     *   bit 1 -> 1200 Hz
-     *   bit 0 -> 1800 Hz
-     * Bytes are transmitted MSB first, matching xor_modulation().
+     * Existing MDC byte stream is already differentially encoded by
+     * xor_modulation(). Transmit the resulting bits MSB-first, using the
+     * same tone convention as the software preamble:
+     *   bit 1 -> 1200 Hz (0xFF / mark)
+     *   bit 0 -> 1800 Hz (0x00 / space).
      */
     saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
     BK4819_EnterTxMute();
@@ -2481,25 +2483,34 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         const uint32_t reload = SysTick->LOAD + 1u;
         unsigned int byte_index;
 
-        for (byte_index = 0; byte_index < combined_size; byte_index++) {
-            int bit_index;
+        {
+            bool first_symbol = true;
+            uint32_t previous_symbol_tick = 0;
 
-            for (bit_index = 7; bit_index >= 0; bit_index--) {
-                const uint8_t bit = (combined_packet[byte_index] >> bit_index) & 1u;
-                const uint16_t tone_frequency = bit ? 1200u : 1800u;
-                const uint32_t start_tick = SysTick->VAL;
+            for (byte_index = 0; byte_index < combined_size; byte_index++) {
+                int bit_index;
 
-                BK4819_WriteRegister(BK4819_REG_71, scale_freq(tone_frequency));
+                for (bit_index = 7; bit_index >= 0; bit_index--) {
+                    const uint8_t bit = (combined_packet[byte_index] >> bit_index) & 1u;
+                    const uint16_t tone_frequency = bit ? 1200u : 1800u;
 
-                // Wait for one complete bit period, accounting for SysTick reload.
-                for (;;) {
-                    const uint32_t current_tick = SysTick->VAL;
-                    const uint32_t elapsed = (start_tick >= current_tick)
-                        ? (start_tick - current_tick)
-                        : (start_tick + (reload - current_tick));
+                    if (!first_symbol) {
+                        // Measure from the previous completed tone-register write.
+                        // This avoids shortening the first symbol by the SPI write time.
+                        for (;;) {
+                            const uint32_t current_tick = SysTick->VAL;
+                            const uint32_t elapsed = (previous_symbol_tick >= current_tick)
+                                ? (previous_symbol_tick - current_tick)
+                                : (previous_symbol_tick + (reload - current_tick));
 
-                    if (elapsed >= bit_period_ticks)
-                        break;
+                            if (elapsed >= bit_period_ticks)
+                                break;
+                        }
+                    }
+
+                    BK4819_WriteRegister(BK4819_REG_71, scale_freq(tone_frequency));
+                    previous_symbol_tick = SysTick->VAL;
+                    first_symbol = false;
                 }
             }
         }
