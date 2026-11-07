@@ -2436,7 +2436,13 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         unsigned int preamble_cycle;
 
         for (preamble_cycle = 0; preamble_cycle < preamble_cycles; preamble_cycle++) {
-            const unsigned int first_1800_size = (preamble_cycle == 0) ? 1u : 4u;
+            /*
+             * Keep a full 1800 Hz lead-in even when preamble is OFF.
+             * A one-byte (8-symbol) lead-in was too short for reliable
+             * acquisition on some receiving radios. Four bytes provide
+             * 32 symbols (26.67 ms) before the 1200 Hz portion.
+             */
+            const unsigned int first_1800_size = 4u;
 
             memset(combined_packet + combined_size, 0x00, first_1800_size);
             combined_size += first_1800_size;
@@ -2490,6 +2496,7 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         const uint32_t bit_period_ticks = 40000u;
         const uint32_t reload = SysTick->LOAD + 1u;
         unsigned int byte_index;
+        uint16_t current_tone_frequency = 1800u;
 
         for (byte_index = 0; byte_index < combined_size; byte_index++) {
             int bit_index;
@@ -2499,10 +2506,15 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
                 const uint16_t tone_frequency = bit ? 1200u : 1800u;
                 const uint32_t symbol_start_tick = SysTick->VAL;
 
-                // Start the next symbol 40,000 clocks after this register write
-                // begins. The same register-write latency applies to each edge,
-                // so it cancels out of the symbol-to-symbol interval.
-                BK4819_WriteRegister(BK4819_REG_71, scale_freq(tone_frequency));
+                /*
+                 * REG_71 only needs updating when the FFSK symbol changes.
+                 * Avoiding redundant writes reduces software-induced timing
+                 * jitter while preserving the 1200-baud symbol clock.
+                 */
+                if (tone_frequency != current_tone_frequency) {
+                    BK4819_WriteRegister(BK4819_REG_71, scale_freq(tone_frequency));
+                    current_tone_frequency = tone_frequency;
+                }
 
                 for (;;) {
                     const uint32_t current_tick = SysTick->VAL;
