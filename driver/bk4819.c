@@ -2429,7 +2429,8 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
 {
     uint16_t saved_reg30;
     uint8_t packet[42];
-    const unsigned int preamble_cycles = (preamble_duration == 0u) ? 1u : preamble_duration;
+    const bool use_extended_preamble = (preamble_duration != 0u);
+    const unsigned int preamble_cycles = use_extended_preamble ? preamble_duration : 1u;
 
     // Keep the existing MDC1200 encoder and its output byte-for-byte unchanged.
     const unsigned int mdc_size = MDC1200_encode_single_packet(packet, op, arg, id);
@@ -2455,8 +2456,9 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
                          ((MDC_FSK_TX_GAIN & 0x7Fu) << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
 
     /*
-     * Preload the first preamble symbol while TX is still muted. The Motorola
-     * long-preamble cycle starts with 20 symbols at 1800 Hz, then 33 at 1200 Hz.
+     * Both preamble modes start at 1800 Hz. The symbol counts below select
+     * the short-1800/long-1200 normal pattern or the long-1800/short-1200
+     * extended pattern.
      */
     BK4819_WriteRegister(BK4819_REG_71, scale_freq(1800u));
 
@@ -2484,11 +2486,16 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         last = SysTick->VAL;
 
         /*
-         * Emit each configured additional-preamble cycle at symbol granularity:
-         * 33 x 1800 Hz (bit 0), followed by 20 x 1200 Hz (bit 1).
-         * Motorola's long 1800-Hz section is followed by the shorter 1200-Hz section.
-         * Do not byte-pad these runs: 33 and 20 are not byte-aligned.
-         * The encoded sync/payload follows immediately at the next symbol.
+         * No additional preamble: one normal MDC preamble with a short 1800-Hz
+         * section (20 symbols) followed by a long 1200-Hz section (33 symbols).
+         *
+         * Additional preamble +1..+7: repeat the extended pattern for the
+         * selected count, with a long 1800-Hz section (33 symbols) followed
+         * by a short 1200-Hz section (20 symbols). This extended pattern is
+         * also the final preamble immediately before the packet.
+         *
+         * Emit at symbol granularity; neither run is byte-aligned. The encoded
+         * sync/payload follows immediately after the selected preamble pattern.
          */
 #define MDC_TX_SEND_SYMBOL(symbol_value) do { \
             const uint8_t bit = (uint8_t)(symbol_value); \
@@ -2508,10 +2515,17 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
             } \
         } while (0)
 
-        for (unsigned int cycle = 0; cycle < preamble_cycles; cycle++) {
-            for (unsigned int symbol = 0; symbol < 33u; symbol++)
-                MDC_TX_SEND_SYMBOL(0u);
+        if (use_extended_preamble) {
+            for (unsigned int cycle = 0; cycle < preamble_cycles; cycle++) {
+                for (unsigned int symbol = 0; symbol < 33u; symbol++)
+                    MDC_TX_SEND_SYMBOL(0u);
+                for (unsigned int symbol = 0; symbol < 20u; symbol++)
+                    MDC_TX_SEND_SYMBOL(1u);
+            }
+        } else {
             for (unsigned int symbol = 0; symbol < 20u; symbol++)
+                MDC_TX_SEND_SYMBOL(0u);
+            for (unsigned int symbol = 0; symbol < 33u; symbol++)
                 MDC_TX_SEND_SYMBOL(1u);
         }
 
