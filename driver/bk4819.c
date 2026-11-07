@@ -2483,34 +2483,27 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         const uint32_t reload = SysTick->LOAD + 1u;
         unsigned int byte_index;
 
-        {
-            bool first_symbol = true;
-            uint32_t previous_symbol_tick = 0;
+        for (byte_index = 0; byte_index < combined_size; byte_index++) {
+            int bit_index;
 
-            for (byte_index = 0; byte_index < combined_size; byte_index++) {
-                int bit_index;
+            for (bit_index = 7; bit_index >= 0; bit_index--) {
+                const uint8_t bit = (combined_packet[byte_index] >> bit_index) & 1u;
+                const uint16_t tone_frequency = bit ? 1200u : 1800u;
+                const uint32_t symbol_start_tick = SysTick->VAL;
 
-                for (bit_index = 7; bit_index >= 0; bit_index--) {
-                    const uint8_t bit = (combined_packet[byte_index] >> bit_index) & 1u;
-                    const uint16_t tone_frequency = bit ? 1200u : 1800u;
+                // Start the next symbol 40,000 clocks after this register write
+                // begins. The same register-write latency applies to each edge,
+                // so it cancels out of the symbol-to-symbol interval.
+                BK4819_WriteRegister(BK4819_REG_71, scale_freq(tone_frequency));
 
-                    if (!first_symbol) {
-                        // Measure from the previous completed tone-register write.
-                        // This avoids shortening the first symbol by the SPI write time.
-                        for (;;) {
-                            const uint32_t current_tick = SysTick->VAL;
-                            const uint32_t elapsed = (previous_symbol_tick >= current_tick)
-                                ? (previous_symbol_tick - current_tick)
-                                : (previous_symbol_tick + (reload - current_tick));
+                for (;;) {
+                    const uint32_t current_tick = SysTick->VAL;
+                    const uint32_t elapsed = (symbol_start_tick >= current_tick)
+                        ? (symbol_start_tick - current_tick)
+                        : (symbol_start_tick + (reload - current_tick));
 
-                            if (elapsed >= bit_period_ticks)
-                                break;
-                        }
-                    }
-
-                    BK4819_WriteRegister(BK4819_REG_71, scale_freq(tone_frequency));
-                    previous_symbol_tick = SysTick->VAL;
-                    first_symbol = false;
+                    if (elapsed >= bit_period_ticks)
+                        break;
                 }
             }
         }
