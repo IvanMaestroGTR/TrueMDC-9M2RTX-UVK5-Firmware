@@ -2437,13 +2437,13 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
 
         for (preamble_cycle = 0; preamble_cycle < preamble_cycles; preamble_cycle++) {
             /*
-             * OFF still needs a detectable two-tone starter: use 32 symbols
-             * at 1800 Hz before the 24-symbol 1200 Hz section. For configured
-             * preambles, preserve the existing short first 1800 Hz section.
+             * Use a full 32-symbol 1800 Hz lead-in for every preamble mode.
+             * The former 8-symbol first run was short enough that TX startup
+             * settling could consume much of it, making the first tone appear
+             * chopped on receiving radios. Keep the following 24-symbol
+             * 1200 Hz section and all subsequent configured cycles unchanged.
              */
-            const unsigned int first_1800_size =
-                (preamble_duration == 0u && preamble_cycle == 0u) ? 4u :
-                ((preamble_cycle == 0u) ? 1u : 4u);
+            const unsigned int first_1800_size = 4u;
 
             memset(combined_packet + combined_size, 0x00, first_1800_size);
             combined_size += first_1800_size;
