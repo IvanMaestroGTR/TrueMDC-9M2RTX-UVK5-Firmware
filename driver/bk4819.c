@@ -2484,9 +2484,10 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         last = SysTick->VAL;
 
         /*
-         * Emit each configured long-preamble cycle at symbol granularity:
-         * 20 x 1800 Hz (bit 0), followed by 33 x 1200 Hz (bit 1).
-         * Do not byte-pad these runs: 20 and 33 are not byte-aligned.
+         * Emit each configured additional-preamble cycle at symbol granularity:
+         * 33 x 1800 Hz (bit 0), followed by 20 x 1200 Hz (bit 1).
+         * Motorola's long 1800-Hz section is followed by the shorter 1200-Hz section.
+         * Do not byte-pad these runs: 33 and 20 are not byte-aligned.
          * The encoded sync/payload follows immediately at the next symbol.
          */
 #define MDC_TX_SEND_SYMBOL(symbol_value) do { \
@@ -2508,9 +2509,9 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         } while (0)
 
         for (unsigned int cycle = 0; cycle < preamble_cycles; cycle++) {
-            for (unsigned int symbol = 0; symbol < 20u; symbol++)
-                MDC_TX_SEND_SYMBOL(0u);
             for (unsigned int symbol = 0; symbol < 33u; symbol++)
+                MDC_TX_SEND_SYMBOL(0u);
+            for (unsigned int symbol = 0; symbol < 20u; symbol++)
                 MDC_TX_SEND_SYMBOL(1u);
         }
 
