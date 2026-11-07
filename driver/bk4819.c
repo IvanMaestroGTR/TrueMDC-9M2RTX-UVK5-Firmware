@@ -2429,38 +2429,10 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
 {
     uint16_t saved_reg30;
     uint8_t packet[42];
-    uint8_t combined_packet[256];
-    unsigned int combined_size = 0;
     const unsigned int preamble_cycles = (preamble_duration == 0u) ? 1u : preamble_duration;
 
     // Keep the existing MDC1200 encoder and its output byte-for-byte unchanged.
     const unsigned int mdc_size = MDC1200_encode_single_packet(packet, op, arg, id);
-
-    // Keep the existing configurable Motorola-style software preamble unchanged.
-    {
-        unsigned int preamble_cycle;
-
-        for (preamble_cycle = 0; preamble_cycle < preamble_cycles; preamble_cycle++) {
-            /*
-             * Use a full 32-symbol 1800 Hz lead-in for every preamble mode.
-             * The former 8-symbol first run was short enough that TX startup
-             * settling could consume much of it, making the first tone appear
-             * chopped on receiving radios. Keep the following 24-symbol
-             * 1200 Hz section and all subsequent configured cycles unchanged.
-             */
-            const unsigned int first_1800_size = 4u;
-
-            memset(combined_packet + combined_size, 0x00, first_1800_size);
-            combined_size += first_1800_size;
-
-            memset(combined_packet + combined_size, 0xFF, 3u);
-            combined_size += 3u;
-        }
-    }
-
-    // Append the encoded MDC packet without a gap.
-    memcpy(combined_packet + combined_size, packet, mdc_size);
-    combined_size += mdc_size;
 
     /*
      * Raw FFSK transmit using the BK4819 Tone-1 generator.
@@ -2483,9 +2455,8 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
                          ((MDC_FSK_TX_GAIN & 0x7Fu) << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
 
     /*
-     * Preload the first preamble symbol while TX is still muted. This avoids
-     * briefly transmitting a stale/default Tone-1 frequency when the carrier
-     * is unmuted. The first preamble byte is 0x00, so its first symbol is 1800 Hz.
+     * Preload the first preamble symbol while TX is still muted. The Motorola
+     * long-preamble cycle starts with 20 symbols at 1800 Hz, then 33 at 1200 Hz.
      */
     BK4819_WriteRegister(BK4819_REG_71, scale_freq(1800u));
 
@@ -2512,30 +2483,42 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         __disable_irq();                 // ~190 ms, no ISR jitter
         last = SysTick->VAL;
 
-        for (byte_index = 0; byte_index < combined_size; byte_index++) {
-            int bit_index;
-            for (bit_index = 7; bit_index >= 0; bit_index--) {
-                const uint8_t bit = (combined_packet[byte_index] >> bit_index) & 1u;
+        /*
+         * Emit each configured long-preamble cycle at symbol granularity:
+         * 20 x 1800 Hz (bit 0), followed by 33 x 1200 Hz (bit 1).
+         * Do not byte-pad these runs: 20 and 33 are not byte-aligned.
+         * The encoded sync/payload follows immediately at the next symbol.
+         */
+#define MDC_TX_SEND_SYMBOL(symbol_value) do { \
+            const uint8_t bit = (uint8_t)(symbol_value); \
+            if (bit != cur_bit) { \
+                BK4819_WriteRegister(BK4819_REG_71, bit ? reg71_1200 : reg71_1800); \
+                cur_bit = bit; \
+            } \
+            for (;;) { \
+                const uint32_t now = SysTick->VAL; \
+                const uint32_t d = (last >= now) ? (last - now) : (last + reload - now); \
+                last = now; \
+                acc_q8 += d << 8; \
+                if (acc_q8 >= bit_ticks_q8) { \
+                    acc_q8 -= bit_ticks_q8; \
+                    break; \
+                } \
+            } \
+        } while (0)
 
-                if (bit != cur_bit) {
-                    BK4819_WriteRegister(BK4819_REG_71, bit ? reg71_1200 : reg71_1800);
-                    cur_bit = bit;
-                }
-
-                // Drift-free wait: leftover time carries into the next symbol.
-                for (;;) {
-                    const uint32_t now = SysTick->VAL;
-                    const uint32_t d = (last >= now) ? (last - now)
-                                                     : (last + reload - now);
-                    last = now;
-                    acc_q8 += d << 8;
-                    if (acc_q8 >= bit_ticks_q8) {
-                        acc_q8 -= bit_ticks_q8;
-                        break;
-                    }
-                }
-            }
+        for (unsigned int cycle = 0; cycle < preamble_cycles; cycle++) {
+            for (unsigned int symbol = 0; symbol < 20u; symbol++)
+                MDC_TX_SEND_SYMBOL(0u);
+            for (unsigned int symbol = 0; symbol < 33u; symbol++)
+                MDC_TX_SEND_SYMBOL(1u);
         }
+
+        for (byte_index = 0; byte_index < mdc_size; byte_index++) {
+            for (int bit_index = 7; bit_index >= 0; bit_index--)
+                MDC_TX_SEND_SYMBOL((packet[byte_index] >> bit_index) & 1u);
+        }
+#undef MDC_TX_SEND_SYMBOL
 
         if (!primask)
             __enable_irq();
