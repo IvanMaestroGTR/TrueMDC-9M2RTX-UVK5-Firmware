@@ -2469,6 +2469,14 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
     BK4819_WriteRegister(BK4819_REG_70,
                          BK4819_REG_70_ENABLE_TONE1 |
                          ((MDC_FSK_TX_GAIN & 0x7Fu) << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
+
+    /*
+     * Preload the first preamble symbol while TX is still muted. This avoids
+     * briefly transmitting a stale/default Tone-1 frequency when the carrier
+     * is unmuted. The first preamble byte is 0x00, so its first symbol is 1800 Hz.
+     */
+    BK4819_WriteRegister(BK4819_REG_71, scale_freq(1800u));
+
     BK4819_EnableTXLink();
     BK4819_ExitTxMute();
 
