@@ -26,6 +26,7 @@
 #include "gpio.h"
 #include "system.h"
 #include "systick.h"
+#include "ARMCM0.h"
 
 #ifdef ENABLE_MDC1200
 #include "app/mdc1200.h"
@@ -2421,6 +2422,7 @@ static void BK4819_send_FSK_packet(const uint8_t *packet, unsigned int size)
 
 void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id, const uint8_t preamble_duration)
 {
+    uint16_t saved_reg30;
     uint8_t packet[42];
     uint8_t combined_packet[256];
     unsigned int combined_size = 0;
@@ -2459,6 +2461,7 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
      *   bit 0 -> 1800 Hz
      * Bytes are transmitted MSB first, matching xor_modulation().
      */
+    saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
     BK4819_EnterTxMute();
 
     BK4819_WriteRegister(BK4819_REG_70,
@@ -2505,11 +2508,7 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
     // Stop the tone generator and restore the normal PTT transmit audio path.
     BK4819_EnterTxMute();
     BK4819_WriteRegister(BK4819_REG_70, 0);
-    BK4819_TxOn_Beep();
-
-    // The caller controls when the microphone is unmuted; preserve the
-    // pre-ID mute state here so this also works for post-ID transmission.
-    BK4819_MuteMic();
+    BK4819_WriteRegister(BK4819_REG_30, saved_reg30);
     BK4819_ExitTxMute();
 }
 
