@@ -494,7 +494,8 @@ static void tmid_rx_stop(void)
 
 void TMID_RxService(void)
 {
-    if (!tmid_mode_selected() || gCurrentFunction == FUNCTION_TRANSMIT) {
+    if (!tmid_mode_selected() || gCurrentFunction == FUNCTION_TRANSMIT ||
+        gCurrentFunction == FUNCTION_POWER_SAVE) {
         tmid_rx_stop();
         return;
     }
