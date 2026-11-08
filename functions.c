@@ -263,13 +263,9 @@ void FUNCTION_Transmit() {
     }
 #endif
 
-    // For DTMF PRE/BOTH, the pre-ID can act as the talk-permit tone
-    // when D ST is enabled. This avoids a second TPT immediately after
-    // the DTMF ID. If D ST is OFF, keep the normal talk-permit tone.
-    const bool dtmfPreIdIsTalkPermit = sendDtmfPTTID && gEeprom.DTMF_SIDE_TONE;
-
-    if (!dtmfPreIdIsTalkPermit &&
-        (gEeprom.field38_0x33 & 7) != TALK_PERMIT_TONE_OFF &&
+    // Automatic DTMF PTT-ID has been removed, so retain the normal
+    // talk-permit tone independently of manual DTMF keying.
+    if ((gEeprom.field38_0x33 & 7) != TALK_PERMIT_TONE_OFF &&
         gEeprom.BOOT_BEEP_CONTROL) {
         BK4819_PlayTalkPermitToneTx(gEeprom.field38_0x33 & 7, false);
     }
