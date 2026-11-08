@@ -793,13 +793,16 @@ break;
         case MENU_AX25_CALLSIGN: {
             if (gIsInSubMenu) {
                 UI_PrintStringSmall(edit, menu_item_x1, menu_item_x2, 3);
-                if (edit_index < 6)
-                    UI_PrintStringSmall("^", menu_item_x1 + (((menu_item_x2 - menu_item_x1) - 42) + 1) / 2 + (7 * edit_index), 0, 4);
+                if (edit_index < 8 && edit_index != 6)
+                    UI_PrintStringSmall("^", menu_item_x1 + (((menu_item_x2 - menu_item_x1) - 56) + 1) / 2 + (7 * edit_index), 0, 4);
             } else {
-                UI_PrintStringSmall(gEeprom.AX25_CALLSIGN, menu_item_x1, menu_item_x2, 3);
+                sprintf(String, "%s-%X", gEeprom.AX25_CALLSIGN, gEeprom.AX25_SSID);
+                UI_PrintStringSmall(String, menu_item_x1, menu_item_x2, 3);
                 edit_index = -1;
-                memcpy(edit, gEeprom.AX25_CALLSIGN, 7);
-                edit[6] = '\0';
+                memcpy(edit, gEeprom.AX25_CALLSIGN, 6);
+                edit[6] = '-';
+                edit[7] = (char)(gEeprom.AX25_SSID < 10u ? '0' + gEeprom.AX25_SSID : 'A' + gEeprom.AX25_SSID - 10u);
+                edit[8] = '\0';
             }
             already_printed = true;
             break;
