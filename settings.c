@@ -188,11 +188,11 @@ void SETTINGS_InitEEPROM(void)
         uint8_t stored_ptt_id = Data[1];
         if (!compact_ptt_id_format) {
             if (stored_ptt_id >= 10u && stored_ptt_id <= 12u)
-                stored_ptt_id = (uint8_t)(PTT_ID_MODE_AX25_PRE + stored_ptt_id - 10u);
+                stored_ptt_id = (uint8_t)(PTT_ID_MODE_TMID_PRE + stored_ptt_id - 10u);
             else if (stored_ptt_id >= 7u && stored_ptt_id <= 9u)
                 stored_ptt_id = PTT_ID_MODE_OFF;
         }
-        if (stored_ptt_id > PTT_ID_MODE_AX25_BOTH)
+        if (stored_ptt_id > PTT_ID_MODE_TMID_BOTH)
             stored_ptt_id = PTT_ID_MODE_OFF;
         gEeprom.PTT_ID = (PTT_ID_Mode_t)stored_ptt_id;
     }
