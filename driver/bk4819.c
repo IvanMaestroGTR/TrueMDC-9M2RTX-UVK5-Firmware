@@ -387,15 +387,15 @@ static void BK4819_TMIDEncodePayload(const uint8_t input[TMID_DATA_BYTES],
 {
     uint8_t state = 0;
     memset(output, 0, TMID_CODED_BYTES);
-    for (unsigned int t = 0; t < TMID_DATA_BYTES * 8u; ++t) {
-        const uint8_t bit = (input[t >> 3] >> (t & 7u)) & 1u;
+    for (unsigned int t = 0; t < TMID_CODE_BITS; ++t) {
+        const uint8_t bit = (t < TMID_DATA_BYTES * 8u)
+                          ? ((input[t >> 3] >> (t & 7u)) & 1u) : 0u;
         const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
-        const uint8_t parity = BK4819_TMIDParity(reg);
         if (bit)
             output[t >> 3] |= (uint8_t)(1u << (t & 7u));
-        if (parity)
-            output[(TMID_DATA_BYTES * 8u + t) >> 3] |=
-                (uint8_t)(1u << ((TMID_DATA_BYTES * 8u + t) & 7u));
+        if (BK4819_TMIDParity(reg))
+            output[(TMID_STREAM_BYTES * 8u + t) >> 3] |=
+                (uint8_t)(1u << ((TMID_STREAM_BYTES * 8u + t) & 7u));
         state = reg & 0x3Fu;
     }
 }
