@@ -213,7 +213,7 @@ void FUNCTION_Transmit() {
     }
 
     // Process manually queued DTMF keying only. Automatic DTMF PTT-ID modes
-    // are intentionally removed; AX.25 must never fall through to TX-UP DTMF.
+    // are intentionally removed; the callsign beacon never falls through to TX-UP DTMF.
     DTMF_Reply(false);
 #ifdef ENABLE_MDC1200
     const bool useFleetSyncPTTID = (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
