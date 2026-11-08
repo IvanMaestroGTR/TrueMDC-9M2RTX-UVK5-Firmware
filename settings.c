@@ -180,9 +180,9 @@ void SETTINGS_InitEEPROM(void)
 #ifdef ENABLE_ALARM
     gEeprom.ALARM_MODE                 = (Data[0] <  2) ? Data[0] : true;
 #endif
-    /* Supported PTT ID values: Off, Pre/Post/Both for MDC, FleetSync and DTMF. */
+    /* Supported PTT ID values include the AX.25 APRS modes. */
     gEeprom.PTT_ID                          = (Data[1] >= PTT_ID_MODE_OFF &&
-                                               Data[1] <= PTT_ID_MODE_DTMF_BOTH) ?
+                                               Data[1] <= PTT_ID_MODE_AX25_BOTH) ?
                                               Data[1] : PTT_ID_MODE_OFF;
     gEeprom.REPEATER_TAIL_TONE_ELIMINATION = (Data[2] >= 2 && Data[2] <= 10) ? Data[2] : 2;
     gEeprom.TX_VFO                         = (Data[3] <  2) ? Data[3] : 0;

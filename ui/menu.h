@@ -171,7 +171,7 @@ extern const char    gSubMenu_AL_MOD[2][5];
 extern const char        gSubMenu_D_RSP[4][11];//11
 #endif
 
-extern const char *const gSubMenu_PTT_ID[10];
+extern const char *const gSubMenu_PTT_ID[13];
 
 
 

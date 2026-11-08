@@ -314,7 +314,10 @@ const char *const gSubMenu_PTT_ID[] =
     "Both FSync",
     "Pre DTMF",
     "Post DTMF",
-    "Both DTMF"
+    "Both DTMF",
+    "Pre AX.25",
+    "Post AX.25",
+    "Both AX.25"
 };
 
 #ifdef ENABLE_MDC1200

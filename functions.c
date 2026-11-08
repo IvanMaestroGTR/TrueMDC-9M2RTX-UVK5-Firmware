@@ -199,6 +199,15 @@ void FUNCTION_Transmit() {
     // turn the RED LED on
     BK4819_ToggleGpioOut(BK4819_GPIO5_PIN1_RED, true);
 
+    if (gEeprom.PTT_ID == PTT_ID_MODE_AX25_PRE ||
+        gEeprom.PTT_ID == PTT_ID_MODE_AX25_BOTH) {
+        BK4819_MuteMic();
+        SYSTEM_DelayMs(200);
+        BK4819_SendAX25PTTID();
+        BK4819_UnmuteMic();
+        SYSTEM_DelayMs(20);
+    }
+
     const bool hasPreDtmfPTTID = (gEeprom.PTT_ID == PTT_ID_MODE_DTMF_PRE ||
                                   gEeprom.PTT_ID == PTT_ID_MODE_DTMF_BOTH);
     const bool sendDtmfPTTID = hasPreDtmfPTTID &&

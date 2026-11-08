@@ -372,7 +372,114 @@ void BK4819_InitAGC(bool amModulation) {
 }
 
 
+/*
+ * Minimal APRS AX.25 status frame for PTT identification.
+ * Bell 202 AFSK: 1200 Hz mark, 2200 Hz space, 1200 symbols/s.
+ * Frame: APRS>9M2RTX with status text; no position is fabricated.
+ */
+void BK4819_SendAX25PTTID(void)
+{
+    uint8_t frame[32];
+    uint8_t n = 0;
+    uint16_t crc = 0xFFFFu;
+    uint16_t saved_reg30;
+    uint8_t nrzi = 1u, tone_mark = 1u, ones = 0u;
+    const uint16_t mark = scale_freq(1200u);
+    const uint16_t space = scale_freq(2200u);
+    const uint32_t bit_ticks_q8 = 39870u << 8;
+    const uint32_t reload = SysTick->LOAD + 1u;
+    uint32_t acc_q8 = 0, last;
+    const uint32_t primask = __get_PRIMASK();
+
+    {
+        static const char dest[] = "APRS  ";
+        static const char source[] = "9M2RTX";
+        for (unsigned int i = 0; i < 6; ++i) frame[n++] = (uint8_t)dest[i] << 1;
+        frame[n++] = 0x60u;
+        for (unsigned int i = 0; i < 6; ++i) frame[n++] = (uint8_t)source[i] << 1;
+        frame[n++] = 0x61u;
+    }
+    frame[n++] = 0x03u;
+    frame[n++] = 0xF0u;
+    frame[n++] = '>';
+    frame[n++] = '9'; frame[n++] = 'M'; frame[n++] = '2';
+    frame[n++] = 'R'; frame[n++] = 'T'; frame[n++] = 'X';
+
+    for (unsigned int i = 0; i < n; ++i) {
+        crc ^= frame[i];
+        for (unsigned int b = 0; b < 8; ++b)
+            crc = (crc & 1u) ? (crc >> 1) ^ 0x8408u : crc >> 1;
+    }
+    crc ^= 0xFFFFu;
+    frame[n++] = (uint8_t)crc;
+    frame[n++] = (uint8_t)(crc >> 8);
+
+    saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
+    BK4819_EnterTxMute();
+    BK4819_SetAF(BK4819_AF_MUTE);
+    BK4819_WriteRegister(BK4819_REG_70,
+                         BK4819_REG_70_ENABLE_TONE1 |
+                         (96u << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
+    BK4819_WriteRegister(BK4819_REG_71, mark);
+    BK4819_EnableTXLink();
+    BK4819_ExitTxMute();
+
+    __disable_irq();
+    last = SysTick->VAL;
+
+#define AX25_WAIT_SYMBOL() do { \
+        for (;;) { \
+            const uint32_t now = SysTick->VAL; \
+            const uint32_t d = (last >= now) ? (last - now) : (last + reload - now); \
+            last = now; acc_q8 += d << 8; \
+            if (acc_q8 >= bit_ticks_q8) { acc_q8 -= bit_ticks_q8; break; } \
+        } \
+    } while (0)
+#define AX25_SEND_RAW_BIT(v) do { \
+        const uint8_t bit_ = (uint8_t)(v); \
+        if (bit_ == 0u) nrzi ^= 1u; \
+        if (nrzi != tone_mark) { \
+            BK4819_WriteRegister(BK4819_REG_71, nrzi ? mark : space); \
+            tone_mark = nrzi; \
+        } \
+        AX25_WAIT_SYMBOL(); \
+    } while (0)
+#define AX25_SEND_FLAG() do { \
+        const uint8_t flag_ = 0x7Eu; \
+        for (unsigned int fb_ = 0; fb_ < 8; ++fb_) \
+            AX25_SEND_RAW_BIT((flag_ >> fb_) & 1u); \
+    } while (0)
+
+    for (unsigned int f = 0; f < 20u; ++f) AX25_SEND_FLAG();
+    for (unsigned int i = 0; i < n; ++i) {
+        for (unsigned int b = 0; b < 8u; ++b) {
+            const uint8_t bit = (frame[i] >> b) & 1u;
+            AX25_SEND_RAW_BIT(bit);
+            if (bit) {
+                if (++ones == 5u) { AX25_SEND_RAW_BIT(0u); ones = 0u; }
+            } else ones = 0u;
+        }
+    }
+    for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
+
+#undef AX25_SEND_FLAG
+#undef AX25_SEND_RAW_BIT
+#undef AX25_WAIT_SYMBOL
+    if (!primask) __enable_irq();
+
+    BK4819_EnterTxMute();
+    BK4819_WriteRegister(BK4819_REG_70, 0u);
+    BK4819_WriteRegister(BK4819_REG_30, saved_reg30);
+    BK4819_ExitTxMute();
+}
+
 void BK4819_PlayRoger(void) {
+    if (gEeprom.PTT_ID == PTT_ID_MODE_AX25_POST ||
+        gEeprom.PTT_ID == PTT_ID_MODE_AX25_BOTH) {
+        BK4819_MuteMic();
+        SYSTEM_DelayMs(50);
+        BK4819_SendAX25PTTID();
+    }
 #ifdef ENABLE_MDC1200
     if (BK4819_HasPostIDPTTID()) {
         BK4819_MuteMic();
