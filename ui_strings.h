@@ -28,8 +28,6 @@
 #define STR_STE "STE"
 #define STR_RP_STE "RP STE"
 #define STR_V_1_CALL "1 Call"
-#define STR_UPCODE "UPCode"
-#define STR_DWCODE "DWCode"
 #define STR_PTT_ID "PTT ID"
 #define STR_D_ST "D ST"
 #define STR_D_RESP "D Resp"
