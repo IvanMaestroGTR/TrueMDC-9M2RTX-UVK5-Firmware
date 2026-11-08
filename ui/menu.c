@@ -119,9 +119,6 @@ const t_menu_item MenuList[] =
                 // {/*"D List",*/ VOICE_ID_INVALID,                       MENU_D_LIST        ,STR_D_LIST}, // disabled
 #endif
                 // {/*"D Live",*/ VOICE_ID_INVALID, MENU_D_LIVE_DEC, STR_D_LIVE}, // live DTMF decoder disabled
-#ifdef ENABLE_AM_FIX//1
-                {/*"AM Fix",*/ VOICE_ID_INVALID,                       MENU_AM_FIX        ,STR_AM_FIX},
-#endif
 #ifdef ENABLE_AM_FIX_TEST1//0
                 {/*"AM FT1",*/ VOICE_ID_INVALID,                       MENU_AM_FIX_TEST1  ,""},
 #endif
@@ -799,9 +796,6 @@ void UI_DisplayMenu(void) {
 #endif
 #endif
         // case MENU_D_LIVE_DEC: // Live DTMF decoder disabled
-#ifdef ENABLE_AM_FIX
-            case MENU_AM_FIX:
-#endif
 #ifdef ENABLE_NOAA
             case MENU_NOAA_S:
 #endif
