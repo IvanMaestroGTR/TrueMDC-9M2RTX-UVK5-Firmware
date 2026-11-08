@@ -453,13 +453,13 @@ void BK4819_SendAX25PTTID(void)
 #define AX25_SEND_MDC_SYMBOL(v) do { \
         const uint8_t symbol_ = (uint8_t)(v); \
         if (symbol_ != tone_mark) { \
-            BK4819_WriteRegister(BK4819_REG_71, symbol_ ? mark : scale_freq(1800u)); \
+            BK4819_WriteRegister(BK4819_REG_71, symbol_ ? mark : space); \
             tone_mark = symbol_; \
         } \
         AX25_WAIT_SYMBOL(); \
     } while (0)
 #define AX25_SEND_MDC_PREAMBLE() do { \
-        tone_mark = 2u; /* force the first 1800-Hz write after any AX.25 tone */ \
+        tone_mark = 2u; /* force the first 2200-Hz write after any AX.25 tone */ \
         if (gEeprom.MDC1200_PREAMBLE_DURATION <= 1u) { \
             for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
             for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
@@ -472,7 +472,7 @@ void BK4819_SendAX25PTTID(void)
     } while (0)
     if (gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_POST)
         AX25_SEND_MDC_PREAMBLE();
-    /* AX.25 HDLC flags are still mandatory; the MDC-style tone lead-in
+    /* AX.25 HDLC flags are still mandatory; the 2200/1200-Hz tone lead-in
      * replaces the long 20-flag audible bit-sync run, not frame sync. */
     for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
 #else
