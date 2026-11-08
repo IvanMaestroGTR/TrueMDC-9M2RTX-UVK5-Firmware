@@ -37,7 +37,6 @@
 #define STR_D_PREL "D Prel"
 #define STR_D_LIST "D List"
 #define STR_D_LIVE "D Live"
-#define STR_AM_FIX "AM Fix"
 #define STR_RXMODE "RxMode"
 #define STR_SQL "Sql"
 #define STR_F_LOCK "F Lock"
