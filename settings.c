@@ -296,10 +296,7 @@ EEPROM_ReadBuffer(0x0EF0, Data, sizeof(gEeprom.REVIVE_CODE));
 //#ifdef ENABLE_AUDIO_BAR
     //gSetting_mic_bar       = (Data[7] & (1u << 4)) ? true : false;
 //#endif
-#ifdef ENABLE_AM_FIX
-    gSetting_AM_fix = !!(Data[7] & (1u << 5));
-#endif
-  //  gSetting_backlight_on_tx_rx = (Data[7] >> 6) & 3u;
+//  gSetting_backlight_on_tx_rx = (Data[7] >> 6) & 3u;
 
     if (!gEeprom.VFO_OPEN)
     {
@@ -688,10 +685,7 @@ void SETTINGS_SaveSettings(void)
     if (!gSetting_live_DTMF_decoder) State[7] &= ~(1u << 1);
     State[7] = (State[7] & ~(3u << 2)) | ((0 & 3u) << 2);
 
-#ifdef ENABLE_AM_FIX
-    if (!gSetting_AM_fix)            State[7] &= ~(1u << 5);
-#endif
-    State[7] = (State[7] & ~(3u << 6)) | ((2 & 3u) << 6);
+State[7] = (State[7] & ~(3u << 6)) | ((2 & 3u) << 6);
 
     EEPROM_WriteBuffer(0x0F40, State,8);
 }
