@@ -899,10 +899,6 @@ void UI_DisplayMain(void) {
         }
 
 #endif
-        // show the audio scramble symbol
-        if (!isFmVFO && vfoInfo->SCRAMBLING_TYPE > 0/* && gSetting_ScrambleEnable*/) {
-            UI_PrintStringSmall("ENC", LCD_WIDTH + 106, 0, line + 1);//中文信道1
-        }
     }
 #ifdef ENABLE_AGC_SHOW_DATA
     center_line = CENTER_LINE_IN_USE;
