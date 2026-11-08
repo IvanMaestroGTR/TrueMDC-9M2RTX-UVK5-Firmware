@@ -214,7 +214,6 @@ void Main(void) {
     UI_DisplayWelcome();
     SYSTEM_DelayMs(700);
 
-    bool first_boot_screen_skipped = false;
     boot_counter_10ms = 250;
     bool boot_beep_played = false;
 
@@ -223,7 +222,6 @@ void Main(void) {
 
         if (key == KEY_EXIT
                 ) {    // halt boot beeps
-            first_boot_screen_skipped = true;
             boot_counter_10ms = 0;
             break;
         }
@@ -237,20 +235,10 @@ void Main(void) {
         if (boot_counter_10ms == 150 && !boot_beep_played) {
             AUDIO_PlayBootBeep();
             boot_beep_played = true;
-            UI_DisplayWelcomeIds();
         }
 
     }
 
-    if (!first_boot_screen_skipped) {
-        boot_counter_10ms = 100;
-        while (boot_counter_10ms > 0 || (KEYBOARD_Poll() != KEY_INVALID)) {
-            if (KEYBOARD_Poll() == KEY_EXIT) {
-                boot_counter_10ms = 0;
-                break;
-            }
-        }
-    }
 
 #ifdef ENABLE_BOOTLOADER
 
