@@ -459,6 +459,7 @@ void BK4819_SendAX25PTTID(void)
         AX25_WAIT_SYMBOL(); \
     } while (0)
 #define AX25_SEND_MDC_PREAMBLE() do { \
+        tone_mark = 2u; /* force the first 1800-Hz write after any AX.25 tone */ \
         if (gEeprom.MDC1200_PREAMBLE_DURATION <= 1u) { \
             for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
             for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
