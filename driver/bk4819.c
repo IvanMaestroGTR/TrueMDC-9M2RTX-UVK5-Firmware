@@ -487,6 +487,15 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
     for (unsigned int i = 0; i < sizeof(frame); ++i)
         BEACON_SEND_BYTE(frame[i]);
 
+    /*
+     * TMID end marker: 1975 Hz held for the same 33-symbol interval as
+     * the long 1800 Hz preamble segment (33 / 1200 baud = 27.5 ms).
+     * Keep it outside the coded frame so it is not passed to the decoder.
+     */
+    BK4819_WriteRegister(BK4819_REG_71, scale_freq(1975u));
+    for (unsigned int p = 0; p < 33u; ++p)
+        BEACON_WAIT_SYMBOL();
+
 #undef BEACON_SEND_BYTE
 #undef BEACON_SEND_SYMBOL
 #undef BEACON_WAIT_SYMBOL
@@ -509,6 +518,8 @@ void BK4819_PlayRoger(void) {
 #else
         BK4819_SendTMIDBeacon(false);
 #endif
+        /* Match the MDC post-ID transmitter end delay. */
+        SYSTEM_DelayMs(20);
     }
 #ifdef ENABLE_MDC1200
     if (BK4819_HasPostIDPTTID()) {
