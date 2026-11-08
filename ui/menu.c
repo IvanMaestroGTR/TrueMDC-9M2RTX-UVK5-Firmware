@@ -1218,13 +1218,6 @@ break;
         UI_PrintStringSmall(STR_SCAN, menu_item_x1, menu_item_x2, 5);
 
 //
-//    if (UI_MENU_GetCurrentMenuId() == MENU_UPCODE)
-//        if (strlen(gEeprom.DTMF_UP_CODE) > 12)
-//            UI_PrintStringSmall(gEeprom.DTMF_UP_CODE + 12, menu_item_x1, menu_item_x2, 5);
-//
-//    if (UI_MENU_GetCurrentMenuId() == MENU_DWCODE)
-//        if (strlen(gEeprom.DTMF_DOWN_CODE) > 12)
-//            UI_PrintStringSmall(gEeprom.DTMF_DOWN_CODE + 12, menu_item_x1, menu_item_x2, 5);
 #ifdef ENABLE_DTMF_CALLING
     // if (UI_MENU_GetCurrentMenuId() == MENU_D_LIST && gIsDtmfContactValid) { // disabled
     //     Contact[11] = 0;
