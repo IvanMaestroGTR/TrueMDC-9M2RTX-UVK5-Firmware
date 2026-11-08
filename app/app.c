@@ -87,6 +87,7 @@
 #include "ui/ui.h"
 
 static bool flagSaveVfo;
+static bool gRxTalkPermitPlayed;
 static bool flagSaveSettings;
 static bool flagSaveChannel;
 
