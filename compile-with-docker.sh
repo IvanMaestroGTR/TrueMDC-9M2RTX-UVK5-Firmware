@@ -27,7 +27,7 @@ docker run --rm \
         make build \
             FIRMWARE_VERSION='${VERSION}' \
             ENABLE_FMRADIO=1 \
-            ENABLE_SPECTRUM=1 \
+            ENABLE_SPECTRUM=0 \
             ENABLE_MDC1200=1 \
             ENABLE_MDC1200_EDIT=1 \
             ENABLE_MDC1200_CONTACT=1 && \
