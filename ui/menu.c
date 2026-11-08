@@ -775,12 +775,6 @@ break;
             strcpy(String, gSubMenu_OFF_ON[gSubMenuSelection]);
 
             break;
-//        case MENU_SCREN:
-//            strcpy(String, gSubMenu_OFF_ON[gSubMenuSelection]);
-//
-//
-//            break;
-
         case MENU_MEM_CH:
         case MENU_1_CALL:
         case MENU_DEL_CH: {

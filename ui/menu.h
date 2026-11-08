@@ -123,7 +123,6 @@ enum {
 //    MENU_350TX,
 //    MENU_500TX,
 //    MENU_350EN,
-    //  MENU_SCREN,
 #ifdef ENABLE_F_CAL_MENU
     MENU_F_CALI,  // reference xtal calibration
 #endif

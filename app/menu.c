@@ -744,11 +744,6 @@ void MENU_AcceptSetting(void) {
 //			gFlagResetVfos       = true;
 //			break;
 
-//		case MENU_SCREN:
-//			gSetting_ScrambleEnable = gSubMenuSelection;
-//			gFlagReconfigureVfos    = true;
-//			break;
-
 #ifdef ENABLE_F_CAL_MENU
             case MENU_F_CALI:
                 writeXtalFreqCal(gSubMenuSelection, true);
@@ -1141,10 +1136,6 @@ void MENU_ShowCurrentSetting(void) {
 //
 //		case MENU_350EN:
 //			gSubMenuSelection = gSetting_350EN;
-//			break;
-
-//		case MENU_SCREN:
-//			gSubMenuSelection = gSetting_ScrambleEnable;
 //			break;
 
 #ifdef ENABLE_F_CAL_MENU
