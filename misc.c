@@ -86,7 +86,6 @@ bool              gSetting_KILLED;
 //bool              gSetting_500TX;
 //bool              gSetting_350EN;
 uint8_t gSetting_F_LOCK;
-bool gSetting_ScrambleEnable;
 
 
 #ifdef ENABLE_AM_FIX_TEST1

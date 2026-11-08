@@ -96,8 +96,6 @@ void     BK4819_SetupSquelch(
 void     BK4819_SetAF(BK4819_AF_Type_t AF);
 void     BK4819_RX_TurnOn(void);
 void     BK4819_PickRXFilterPathBasedOnFrequency(uint32_t Frequency);
-void     BK4819_DisableScramble(void);
-void     BK4819_EnableScramble(uint8_t Type);
 
 bool     BK4819_CompanderEnabled(void);
 void     BK4819_SetCompander(const unsigned int mode);

@@ -90,7 +90,7 @@ struct {
 
 
   u8 step;
-  u8 scrambler;
+  u8 reserved_channel_byte;
 } channel[214];
 
 #seekto 0xd60;
@@ -213,7 +213,7 @@ u8 lock_flock;
 u8 lock_killed;
 
 #seekto 0xf46;
-u8 lock_enscramble;
+u8 reserved_scrambler_lock;
 
 #seekto 0xf50;
 struct {
@@ -298,9 +298,6 @@ UVK5_POWER_LEVELS = [chirp_common.PowerLevel("L", watts=0.50),
                      chirp_common.PowerLevel("M", watts=3.00),
                      chirp_common.PowerLevel("H", watts=5.00),
                      chirp_common.PowerLevel("UL", watts=0.25)]
-
-# scrambler
-SCRAMBLER_LIST = ["Off", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
 # channel display mode
 CHANNELDISP_LIST = ["Freq", "ChanNum", "Nam", "Name+Freq"]
@@ -1117,11 +1114,6 @@ class UVK5Radio(chirp_common.CloneModeRadio):
                 RadioSettingValueBoolean(False))
             mem.extra.append(rs)
             rs = RadioSetting(
-                "scrambler", "Scrambler",
-                RadioSettingValueList(SCRAMBLER_LIST, current_index=0))
-            mem.extra.append(rs)
-
-            rs = RadioSetting(
                 "scanlists", "Scanlist",
                 RadioSettingValueList(SCANLIST_LIST, current_index=0))
             mem.extra.append(rs)
@@ -1220,17 +1212,6 @@ class UVK5Radio(chirp_common.CloneModeRadio):
                           RadioSettingValueBoolean(is_dtmf))
         mem.extra.append(rs)
         tmpcomment += "DTMFdecode:" + ("ON" if is_dtmf else "off") + " "
-
-        # Scrambler
-        if _mem.scrambler & 0x0f < len(SCRAMBLER_LIST):
-            enc = _mem.scrambler & 0x0f
-        else:
-            enc = 0
-
-        rs = RadioSetting("scrambler", "Scrambler", RadioSettingValueList(
-            SCRAMBLER_LIST, SCRAMBLER_LIST[enc]))
-        mem.extra.append(rs)
-        tmpcomment += "Scrambler:" + SCRAMBLER_LIST[enc] + " "
 
         rs = RadioSetting("scanlists", "Scanlist", RadioSettingValueList(
             SCANLIST_LIST, tmpscn))
@@ -1426,10 +1407,6 @@ class UVK5Radio(chirp_common.CloneModeRadio):
             # FLOCK
             if element.get_name() == "flock":
                 _mem.lock_flock = FLOCK_LIST.index(str(element.value))
-
-            # SCREN
-            if element.get_name() == "enscramble":
-                _mem.lock_enscramble = 1 if element.value.get_value() else 0
 
             # KILLED
             if element.get_name() == "killed":
@@ -2224,12 +2201,6 @@ class UVK5Radio(chirp_common.CloneModeRadio):
                               bool(_mem.lock_killed > 0)))
         unlock.append(rs)
 
-        # SCREEN
-        rs = RadioSetting("enscramble", "Scrambler",
-                          RadioSettingValueBoolean(
-                              bool(_mem.lock_enscramble > 0)))
-        unlock.append(rs)
-
         # readonly info
         # Firmware
         if self.FIRMWARE_VERSION == "":
@@ -2381,10 +2352,6 @@ class UVK5Radio(chirp_common.CloneModeRadio):
 
             if sname == "dtmfdecode":
                 _mem.dtmf_decode = 1 if svalue else 0
-
-            if sname == "scrambler":
-                _mem.scrambler = (
-                    _mem.scrambler & 0xf0) | SCRAMBLER_LIST.index(svalue)
 
             if number < 200 and sname == "scanlists":
                 if svalue == "1":

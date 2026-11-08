@@ -145,7 +145,6 @@ extern bool                  gSetting_KILLED;
 //extern bool                  gSetting_500TX;
 //extern bool                  gSetting_350EN;
 extern uint8_t               gSetting_F_LOCK;
-extern bool                  gSetting_ScrambleEnable;
 
 
 #ifdef ENABLE_AM_FIX_TEST1

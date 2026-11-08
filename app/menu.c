@@ -420,17 +420,6 @@ void MENU_AcceptSetting(void) {
                 gRequestSaveChannel       = 1;
                 return;
 #endif
-        case MENU_SCR:
-            gTxVfo->SCRAMBLING_TYPE = gSubMenuSelection;
-#if 0
-            if (gSubMenuSelection > 0 && gSetting_ScrambleEnable)
-                BK4819_EnableScramble(gSubMenuSelection - 1);
-            else
-                BK4819_DisableScramble();
-#endif
-            gRequestSaveChannel = 1;
-            return;
-
         case MENU_BCL:
             gTxVfo->BUSY_CHANNEL_LOCK = gSubMenuSelection;
             gRequestSaveChannel = 1;
@@ -916,10 +905,6 @@ void MENU_ShowCurrentSetting(void) {
             gSubMenuSelection = gTxVfo->CHANNEL_BANDWIDTH;
             break;
 #endif
-        case MENU_SCR:
-            gSubMenuSelection = gTxVfo->SCRAMBLING_TYPE;
-            break;
-
         case MENU_BCL:
             gSubMenuSelection = gTxVfo->BUSY_CHANNEL_LOCK;
             break;
@@ -1478,8 +1463,7 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
     gRequestDisplayScreen = DISPLAY_MENU;
     if (!gIsInSubMenu) {
 #ifdef ENABLE_VOICE
-        if (UI_MENU_GetCurrentMenuId() != MENU_SCR)
-            gAnotherVoiceID = MenuList[gMenuCursor].voice_id;
+        gAnotherVoiceID = MenuList[gMenuCursor].voice_id;
 #endif
         if (UI_MENU_GetCurrentMenuId() == MENU_DEL_CH || UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME)
 //            if (!RADIO_CheckValidChannel(gSubMenuSelection, false, 0))
@@ -1640,10 +1624,7 @@ UI_MENU_GetCurrentMenuId() == MENU_MDC_ID
     SCANNER_Stop();
 
 #ifdef ENABLE_VOICE
-    if (UI_MENU_GetCurrentMenuId() == MENU_SCR)
-        gAnotherVoiceID = (gSubMenuSelection == 0) ? VOICE_ID_SCRAMBLER_OFF : VOICE_ID_SCRAMBLER_ON;
-    else
-        gAnotherVoiceID = VOICE_ID_CONFIRM;
+    gAnotherVoiceID = VOICE_ID_CONFIRM;
 #endif
 
     gInputBoxIndex = 0;
