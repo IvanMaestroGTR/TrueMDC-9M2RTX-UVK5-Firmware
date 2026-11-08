@@ -574,18 +574,41 @@ void TMID_RxService(void)
             tmid_irq_mask_saved = true;
         }
         tmid_rx_arm();
-    } else {
-        /*
-         * Other radio setup paths can rewrite REG_3F after TMID is armed.
-         * Reassert only the three FSK receive interrupts, preserving every
-         * unrelated interrupt bit. This mirrors the proven APRS RX service.
-         */
+    }
+}
+
+/* Called at the firmware's 10 ms cadence, not from the tight main-loop spin. */
+void TMID_RxTimeSlice10ms(void)
+{
+    static uint8_t idle_ticks;
+    if (!tmid_rx_armed || !tmid_mode_selected() ||
+        gCurrentFunction == FUNCTION_TRANSMIT) {
+        idle_ticks = 0;
+        return;
+    }
+
+    /* Other radio setup paths can rewrite REG_3F after TMID is armed. */
+    {
         const uint16_t required = BK4819_REG_3F_FSK_RX_SYNC |
                                  BK4819_REG_3F_FSK_RX_FINISHED |
                                  BK4819_REG_3F_FSK_FIFO_ALMOST_FULL;
         const uint16_t mask = BK4819_ReadRegister(BK4819_REG_3F);
         if ((mask & required) != required)
             BK4819_WriteRegister(BK4819_REG_3F, mask | required);
+    }
+
+    if (!tmid_rx_capturing) {
+        idle_ticks = 0;
+        return;
+    }
+    if (idle_ticks < 150u)
+        ++idle_ticks;
+    if (idle_ticks >= 150u) {
+        /* Some BK4819 locks lose bit clock before RX_FINISHED is raised. */
+        tmid_rx_read_fifo(8u);
+        tmid_rx_finish();
+        tmid_rx_restart_capture();
+        idle_ticks = 0;
     }
 }
 
