@@ -954,13 +954,11 @@ void UI_DisplayMain(void) {
              * G=good decode, C=codec/CRC fail, L=wrong length, N=no capture. */
             center_line = CENTER_LINE_MDC1200;
             {
-                static const char hex[] = "0123456789ABCDEF";
-                String[0] = 'T'; String[1] = hex[tmid_diag_sync & 15u];
-                String[2] = 'F'; String[3] = hex[tmid_diag_fifo & 15u];
-                String[4] = 'E'; String[5] = hex[tmid_diag_finished & 15u];
-                String[6] = 'B'; String[7] = hex[tmid_diag_bytes & 15u];
-                String[8] = tmid_diag_result;
-                String[9] = '\0';
+                snprintf(String, sizeof(String), "T%02u F%02u E%02u B%02u%c",
+                         (unsigned int)tmid_diag_sync,
+                         (unsigned int)tmid_diag_fifo,
+                         (unsigned int)tmid_diag_finished,
+                         (unsigned int)tmid_diag_bytes, tmid_diag_result);
             }
             UI_PrintStringSmall(String, 2, 0, 3);
             for (uint8_t i = 1; i < 127; i++) {
