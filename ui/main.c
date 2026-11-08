@@ -913,7 +913,12 @@ void UI_DisplayMain(void) {
             gTalkPermitToast != TALK_PERMIT_TOAST_CALL_ENDED) {
             char mdc1200_contact[15];
             center_line = CENTER_LINE_MDC1200;
-            if (mdc1200_contact_find(mdc1200_unit_id, mdc1200_contact)) {
+            if (gEeprom.PTT_ID == PTT_ID_MODE_TMID_PRE ||
+                gEeprom.PTT_ID == PTT_ID_MODE_TMID_POST ||
+                gEeprom.PTT_ID == PTT_ID_MODE_TMID_BOTH) {
+                snprintf(String, sizeof(String), "ID: %.6s-%u",
+                         tmid_rx_callsign, tmid_rx_ssid);
+            } else if (mdc1200_contact_find(mdc1200_unit_id, mdc1200_contact)) {
                 snprintf(String, sizeof(String), "ID: %.14s", mdc1200_contact);
 #ifdef ENABLE_FLEETSYNC
             } else if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
