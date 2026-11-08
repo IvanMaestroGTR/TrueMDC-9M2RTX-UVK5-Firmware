@@ -372,6 +372,34 @@ void BK4819_InitAGC(bool amModulation) {
 }
 
 
+
+static uint8_t BK4819_TMIDParity(uint8_t v)
+{
+    v &= 0x65u;
+    v ^= v >> 4;
+    v ^= v >> 2;
+    v ^= v >> 1;
+    return v & 1u;
+}
+
+static void BK4819_TMIDEncodePayload(const uint8_t input[TMID_DATA_BYTES],
+                                     uint8_t output[TMID_CODED_BYTES])
+{
+    uint8_t state = 0;
+    memset(output, 0, TMID_CODED_BYTES);
+    for (unsigned int t = 0; t < TMID_DATA_BYTES * 8u; ++t) {
+        const uint8_t bit = (input[t >> 3] >> (7u - (t & 7u))) & 1u;
+        const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
+        const uint8_t parity = BK4819_TMIDParity(reg);
+        if (bit)
+            output[t >> 3] |= (uint8_t)(1u << (7u - (t & 7u)));
+        if (parity)
+            output[(TMID_DATA_BYTES * 8u + t) >> 3] |=
+                (uint8_t)(1u << (7u - ((TMID_DATA_BYTES * 8u + t) & 7u)));
+        state = reg & 0x3Fu;
+    }
+}
+
 /*
  * TrueMDC one-way callsign beacon.
  * 1200-baud AFSK: 1200 Hz = 1, 2200 Hz = 0.
@@ -379,9 +407,10 @@ void BK4819_InitAGC(bool amModulation) {
  * then CRC-16/MODBUS (little-endian). No AX.25, HDLC flags, NRZI or bit stuffing.
  * The existing 2200/1200-Hz warble preamble is intentionally preserved.
  */
-void BK4819_SendCallsignBeacon(const bool with_preamble)
+void BK4819_SendTMIDBeacon(const bool with_preamble)
 {
-    uint8_t frame[13];
+    uint8_t frame[4u + TMID_CODED_BYTES];
+    uint8_t payload[TMID_DATA_BYTES];
     uint16_t crc = 0xFFFFu;
     uint16_t saved_reg30;
     uint8_t tone_mark = 2u;
@@ -393,21 +422,20 @@ void BK4819_SendCallsignBeacon(const bool with_preamble)
     const uint32_t primask = __get_PRIMASK();
     static const uint8_t sync[4] = {0xD3u, 0x91u, 0xD3u, 0x91u};
 
-    for (unsigned int i = 0; i < 4u; ++i)
-        frame[i] = sync[i];
+    payload[0] = 0x01u; /* TMID version */
     for (unsigned int i = 0; i < 6u; ++i)
-        frame[4u + i] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
-    frame[10] = (uint8_t)('0' + (gEeprom.AX25_SSID % 10u));
-
-    /* CRC-16/MODBUS over the seven-byte callsign + SSID payload. */
-    for (unsigned int i = 4u; i < 11u; ++i) {
-        crc ^= frame[i];
+        payload[1u + i] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
+    payload[7] = (uint8_t)('0' + (gEeprom.AX25_SSID % 10u));
+    for (unsigned int i = 0; i < 8u; ++i) {
+        crc ^= payload[i];
         for (unsigned int b = 0; b < 8u; ++b)
             crc = (crc & 1u) ? (uint16_t)((crc >> 1) ^ 0xA001u)
                              : (uint16_t)(crc >> 1);
     }
-    frame[11] = (uint8_t)(crc & 0xFFu);
-    frame[12] = (uint8_t)(crc >> 8);
+    payload[8] = (uint8_t)(crc & 0xFFu);
+    payload[9] = (uint8_t)(crc >> 8);
+    memcpy(frame, sync, sizeof(sync));
+    BK4819_TMIDEncodePayload(payload, frame + sizeof(sync));
 
     saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
     BK4819_EnterTxMute();
@@ -471,14 +499,14 @@ void BK4819_SendCallsignBeacon(const bool with_preamble)
 }
 
 void BK4819_PlayRoger(void) {
-    if (gEeprom.PTT_ID == PTT_ID_MODE_AX25_POST ||
-        gEeprom.PTT_ID == PTT_ID_MODE_AX25_BOTH) {
+    if (gEeprom.PTT_ID == PTT_ID_MODE_TMID_POST ||
+        gEeprom.PTT_ID == PTT_ID_MODE_TMID_BOTH) {
         BK4819_MuteMic();
         SYSTEM_DelayMs(50);
 #ifdef ENABLE_MDC1200
-        BK4819_SendCallsignBeacon(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_PRE);
+        BK4819_SendTMIDBeacon(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_PRE);
 #else
-        BK4819_SendCallsignBeacon(false);
+        BK4819_SendTMIDBeacon(false);
 #endif
     }
 #ifdef ENABLE_MDC1200
