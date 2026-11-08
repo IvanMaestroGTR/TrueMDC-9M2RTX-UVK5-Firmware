@@ -2590,22 +2590,22 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
             __disable_irq();
             last = SysTick->VAL;
 
-#define FLEETSYNC_TX_SEND_SYMBOL(symbol_value) do { \\
-                const uint8_t bit = (uint8_t)(symbol_value); \\
-                if (bit != cur_bit) { \\
-                    BK4819_WriteRegister(BK4819_REG_71, bit ? reg71_1200 : reg71_1800); \\
-                    cur_bit = bit; \\
-                } \\
-                for (;;) { \\
-                    const uint32_t now = SysTick->VAL; \\
-                    const uint32_t d = (last >= now) ? (last - now) : (last + reload - now); \\
-                    last = now; \\
-                    acc_q8 += d << 8; \\
-                    if (acc_q8 >= bit_ticks_q8) { \\
-                        acc_q8 -= bit_ticks_q8; \\
-                        break; \\
-                    } \\
-                } \\
+#define FLEETSYNC_TX_SEND_SYMBOL(symbol_value) do { \
+                const uint8_t bit = (uint8_t)(symbol_value); \
+                if (bit != cur_bit) { \
+                    BK4819_WriteRegister(BK4819_REG_71, bit ? reg71_1200 : reg71_1800); \
+                    cur_bit = bit; \
+                } \
+                for (;;) { \
+                    const uint32_t now = SysTick->VAL; \
+                    const uint32_t d = (last >= now) ? (last - now) : (last + reload - now); \
+                    last = now; \
+                    acc_q8 += d << 8; \
+                    if (acc_q8 >= bit_ticks_q8) { \
+                        acc_q8 -= bit_ticks_q8; \
+                        break; \
+                    } \
+                } \
             } while (0)
 
             // Three bytes of alternating 0xAA preamble (24 symbols).
