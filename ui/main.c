@@ -954,8 +954,10 @@ void UI_DisplayMain(void) {
              * G=good decode, C=codec/CRC fail, L=wrong length, N=no capture. */
             center_line = CENTER_LINE_MDC1200;
             snprintf(String, sizeof(String), "T%02u F%02u E%02u B%02u%c",
-                     tmid_diag_sync, tmid_diag_fifo, tmid_diag_finished,
-                     tmid_diag_bytes, tmid_diag_result);
+                     (unsigned int)tmid_diag_sync,
+                     (unsigned int)tmid_diag_fifo,
+                     (unsigned int)tmid_diag_finished,
+                     (unsigned int)tmid_diag_bytes, tmid_diag_result);
             UI_PrintStringSmall(String, 2, 0, 3);
             for (uint8_t i = 1; i < 127; i++) {
                 gFrameBuffer[2][i] ^= 0x80;
