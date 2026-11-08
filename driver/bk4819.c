@@ -2549,49 +2549,86 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
 #ifdef ENABLE_FLEETSYNC
     void BK4819_send_FleetSync(const uint16_t fleet, const uint16_t unit, const bool end_of_transmission)
     {
-        uint16_t fsk_reg59;
+        uint16_t saved_reg30;
         uint8_t packet[FLEETSYNC_PACKET_SIZE];
         const unsigned int packet_size = FleetSync_encode_ani(packet, fleet, unit, end_of_transmission);
-        const unsigned int data_size = packet_size - 4u; // Hardware sends the 4-byte FleetSync sync.
 
-        BK4819_WriteRegister(0x58, (1u << 13) | (7u << 10) | (1u << 1) | (1u << 0));
-        BK4819_WriteRegister(0x72, scale_freq(1200));
-        BK4819_WriteRegister(0x70, (1u << 7) | MDC_FSK_TX_GAIN);
+        /*
+         * FleetSync II: 24 alternating preamble bits, followed by the complete
+         * 32-bit sync word and the 64-bit ANI block produced by the encoder.
+         * The encoder and its packet bytes remain unchanged.
+         *
+         * Use the same software-timed BK4819 Tone-1 FFSK engine as MDC1200.
+         * FleetSync bytes are transmitted MSB-first as encoded by
+         * FleetSync_encode_ani(); unlike MDC1200, no MDC xor_modulation()
+         * transform is applied here.
+         */
+        saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
+        BK4819_EnterTxMute();
 
-        // FleetSync uses a 24-bit alternating 1800/1200 Hz preamble.
-        // REG_59<7:4> is encoded as (preamble_bytes - 1), so 2 = 3 bytes.
-        // Keep the real alternating FFSK preamble; do not disable it.
-        fsk_reg59 = (2u << 4) | (1u << 3);
-        BK4819_WriteRegister(0x5A, 0xAAAA);
-        BK4819_WriteRegister(0x5B, 0x23EB);
-        BK4819_WriteRegister(0x5C, 0x5625);
-        BK4819_WriteRegister(0x5D, ((data_size - 1u) << 8));
-        BK4819_WriteRegister(0x59, (1u << 15) | (1u << 14) | fsk_reg59);
-        BK4819_WriteRegister(0x59, fsk_reg59);
+        BK4819_WriteRegister(BK4819_REG_70,
+                             BK4819_REG_70_ENABLE_TONE1 |
+                             ((MDC_FSK_TX_GAIN & 0x7Fu) << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
 
-        // FleetSync_encode_ani() keeps the sync in the logical packet, but the
-        // BK4819 already transmits it as hardware sync, so load only the ANI.
-        for (unsigned int i = 0; i < data_size / 2u; i++)
-            BK4819_WriteRegister(0x5F, (uint16_t)packet[4u + i * 2u] | ((uint16_t)packet[4u + i * 2u + 1u] << 8));
-        if (data_size & 1u)
-            BK4819_WriteRegister(0x5F, packet[4u + data_size - 1u]);
+        // The 0xAA alternating preamble starts with a 1 (1200 Hz).
+        BK4819_WriteRegister(BK4819_REG_71, scale_freq(1200u));
 
-        BK4819_WriteRegister(0x3F, BK4819_REG_3F_FSK_TX_FINISHED);
-        BK4819_WriteRegister(0x59, (1u << 11) | fsk_reg59);
+        BK4819_EnableTXLink();
+        BK4819_ExitTxMute();
 
-        for (unsigned int timeout = 125; timeout-- > 0;) {
-            SYSTEM_DelayMs(4);
-            if (BK4819_ReadRegister(0x0C) & 1u) {
-                BK4819_WriteRegister(0x02, 0);
-                if (BK4819_ReadRegister(0x02) & BK4819_REG_02_FSK_TX_FINISHED)
-                    break;
+        {
+            const uint32_t bit_ticks_q8 = MDC_TX_BIT_TICKS << 8;
+            const uint32_t reload       = SysTick->LOAD + 1u;
+            const uint16_t reg71_1200   = scale_freq(1200u);
+            const uint16_t reg71_1800   = scale_freq(1800u);
+            const uint32_t primask      = __get_PRIMASK();
+            uint32_t acc_q8 = 0;
+            uint32_t last;
+            uint8_t cur_bit = 1u;
+            unsigned int byte_index;
+
+            __disable_irq();
+            last = SysTick->VAL;
+
+#define FLEETSYNC_TX_SEND_SYMBOL(symbol_value) do { \
+                const uint8_t bit = (uint8_t)(symbol_value); \
+                if (bit != cur_bit) { \
+                    BK4819_WriteRegister(BK4819_REG_71, bit ? reg71_1200 : reg71_1800); \
+                    cur_bit = bit; \
+                } \
+                for (;;) { \
+                    const uint32_t now = SysTick->VAL; \
+                    const uint32_t d = (last >= now) ? (last - now) : (last + reload - now); \
+                    last = now; \
+                    acc_q8 += d << 8; \
+                    if (acc_q8 >= bit_ticks_q8) { \
+                        acc_q8 -= bit_ticks_q8; \
+                        break; \
+                    } \
+                } \
+            } while (0)
+
+            // Three bytes of alternating 0xAA preamble (24 symbols).
+            for (unsigned int symbol = 0; symbol < 24u; symbol++)
+                FLEETSYNC_TX_SEND_SYMBOL((symbol & 1u) == 0u ? 1u : 0u);
+
+            // Send sync + ANI block, all 12 bytes, MSB-first.
+            for (byte_index = 0; byte_index < packet_size; byte_index++) {
+                for (int bit_index = 7; bit_index >= 0; bit_index--)
+                    FLEETSYNC_TX_SEND_SYMBOL((packet[byte_index] >> bit_index) & 1u);
             }
+
+#undef FLEETSYNC_TX_SEND_SYMBOL
+
+            if (!primask)
+                __enable_irq();
         }
 
-        BK4819_WriteRegister(0x59, fsk_reg59);
-        BK4819_WriteRegister(0x3F, 0);
-        BK4819_WriteRegister(0x70, 0);
-        BK4819_WriteRegister(0x58, 0);
+        // Stop Tone-1 and restore the normal PTT transmit audio path.
+        BK4819_EnterTxMute();
+        BK4819_WriteRegister(BK4819_REG_70, 0);
+        BK4819_WriteRegister(BK4819_REG_30, saved_reg30);
+        BK4819_ExitTxMute();
     }
 #endif
 

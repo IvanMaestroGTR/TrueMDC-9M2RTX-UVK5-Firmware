@@ -1,4 +1,4 @@
-# Note: This firmware is currently compatible with v1 hardware only. Support for other hardware versions is planned for the future.
+# Note: This firmware is currently compatible with v1 hardware only. Support for V2 is now available in another repository, see: https://github.com/IvanMaestroGTR/TrueMDC-9M2RTX-UVK5-V2-Firmware.
 
 This firmware is based on the LOSEHU132E firmware (see: https://github.com/losehu/uv-k5-firmware-custom), with several changes made to differentiate it from the original 132E build.
 Please refer to the releases for the changelog.
