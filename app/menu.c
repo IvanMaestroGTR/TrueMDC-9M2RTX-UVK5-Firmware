@@ -1501,6 +1501,16 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
         {
             gInputBoxIndex = 0;
             edit_index = -1;
+            if (UI_MENU_GetCurrentMenuId() == MENU_AX25_CALLSIGN) {
+                memcpy(edit, gEeprom.AX25_CALLSIGN, 6);
+                edit[6] = '-';
+                edit[7] = (char)(gEeprom.AX25_SSID < 10u ?
+                                '0' + gEeprom.AX25_SSID :
+                                'A' + gEeprom.AX25_SSID - 10u);
+                edit[8] = '\0';
+                edit_index = 0;
+                memcpy(edit_original, edit, sizeof(edit_original));
+            }
 
         }
 #ifdef ENABLE_MDC1200
@@ -1548,15 +1558,7 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
     }
 #endif
     if (UI_MENU_GetCurrentMenuId() == MENU_AX25_CALLSIGN) {
-        if (edit_index < 0) {
-            memcpy(edit, gEeprom.AX25_CALLSIGN, 6);
-            edit[6] = '-';
-            edit[7] = (char)(gEeprom.AX25_SSID < 10u ? '0' + gEeprom.AX25_SSID : 'A' + gEeprom.AX25_SSID - 10u);
-            edit[8] = '\0';
-            edit_index = 0;
-            memcpy(edit_original, edit, sizeof(edit_original));
-            return;
-        } else if (edit_index < 8) {
+        if (edit_index >= 0 && edit_index < 8) {
             if (++edit_index == 6)
                 ++edit_index; /* position 6 is the fixed SSID separator */
             if (edit_index < 8)
