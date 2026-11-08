@@ -457,7 +457,6 @@ static void tmid_rx_arm(void)
         (1u << 13) | (7u << 10) | (3u << 8) |
         (3u << 6) | (1u << 1) | 1u);
     BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
-    BK4819_WriteRegister(BK4819_REG_5B, 0xD391u);
     BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u); /* disable hardware CRC */
     BK4819_WriteRegister(BK4819_REG_5D,
                          (uint16_t)((TMID_CODED_BYTES - 1u) << 8));
