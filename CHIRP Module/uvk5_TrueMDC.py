@@ -1450,14 +1450,6 @@ class UVK5Radio(chirp_common.CloneModeRadio):
                 _mem.dtmf_settings.code_interval_time = \
                         int(int(element.value)/10)
 
-            if element.get_name() == "dtmf_dtmf_up_code":
-                k = str(element.value).strip("\x20\xff\x00") + "\x00"*16
-                _mem.dtmf_settings_numbers.dtmf_up_code = k[0:16]
-
-            if element.get_name() == "dtmf_dtmf_down_code":
-                k = str(element.value).rstrip("\x20\xff\x00") + "\x00"*16
-                _mem.dtmf_settings_numbers.dtmf_down_code = k[0:16]
-
             # MDC Alias
             element_name = element.get_name()
             valid_mdc = 0
@@ -1697,34 +1689,6 @@ class UVK5Radio(chirp_common.CloneModeRadio):
         rs = RadioSetting("dtmf_code_interval_time",
                           "Code Interval Time (ms)",
                           RadioSettingValueInteger(30, 1000, tmpval, 10))
-        signalling_dtmf.append(rs)
-
-        tmpval = str(_mem.dtmf_settings_numbers.dtmf_up_code).upper().strip(
-                "\x00\xff\x20")
-        for i in tmpval:
-            if i in DTMF_CHARS_UPDOWN or i == "":
-                continue
-            else:
-                tmpval = "123"
-                break
-        val = RadioSettingValueString(0, 16, tmpval, autopad=False)
-        val.set_charset(DTMF_CHARS_UPDOWN)
-        rs = RadioSetting("dtmf_dtmf_up_code",
-                          "Upcode (1-16 digits, 0-9 ABCD*#)", val)
-        signalling_dtmf.append(rs)
-
-        tmpval = str(_mem.dtmf_settings_numbers.dtmf_down_code).upper().strip(
-                "\x00\xff\x20")
-        for i in tmpval:
-            if i in DTMF_CHARS_UPDOWN:
-                continue
-            else:
-                tmpval = "456"
-                break
-        val = RadioSettingValueString(0, 16, tmpval, autopad=False)
-        val.set_charset(DTMF_CHARS_UPDOWN)
-        rs = RadioSetting("dtmf_dtmf_down_code",
-                          "Downcode (1-16 digits, 0-9 ABCD*#)", val)
         signalling_dtmf.append(rs)
 
         # MDC Alias List
