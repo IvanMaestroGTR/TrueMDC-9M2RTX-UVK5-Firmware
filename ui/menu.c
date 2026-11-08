@@ -106,8 +106,6 @@ const t_menu_item MenuList[] =
 
                 {/*"ANI ID",*/ VOICE_ID_ANI_CODE,                      MENU_ANI_ID        ,DTMF_ID},
 #endif
-                {/*"UPCode",*/ VOICE_ID_INVALID, MENU_UPCODE, STR_UPCODE},
-                {/*"DWCode",*/ VOICE_ID_INVALID, MENU_DWCODE, STR_DWCODE},
                 {/*"D ST",*/   VOICE_ID_INVALID, MENU_D_ST, STR_D_ST},
 #ifdef ENABLE_DTMF_CALLING
                 // DTMF response/hold menus disabled
@@ -1009,14 +1007,6 @@ break;
                 break;
 #endif
 
-        case MENU_UPCODE:
-
-            sprintf(String, "%.8s\n%.8s", gEeprom.DTMF_UP_CODE, gEeprom.DTMF_UP_CODE + 8);
-            break;
-
-        case MENU_DWCODE:
-            sprintf(String, "%.8s\n%.8s", gEeprom.DTMF_DOWN_CODE, gEeprom.DTMF_DOWN_CODE + 8);
-            break;
 #ifdef ENABLE_DTMF_CALLING
             // case MENU_D_RSP: // DTMF Response disabled
             //     strcpy(String, gSubMenu_D_RSP[gSubMenuSelection]);
