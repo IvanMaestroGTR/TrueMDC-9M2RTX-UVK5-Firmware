@@ -432,8 +432,8 @@ static uint16_t GetRssi() {
     }
     uint16_t rssi = BK4819_GetRSSI();
 #ifdef ENABLE_AM_FIX
-    if(settings.modulationType==MODULATION_AM && gSetting_AM_fix)
-        rssi += AM_fix_get_gain_diff()*2;
+    if (settings.modulationType == MODULATION_AM)
+        rssi += AM_fix_get_gain_diff() * 2;
 #endif
     return rssi;
 }
