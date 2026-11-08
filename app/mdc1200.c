@@ -466,6 +466,7 @@ bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
 
 static uint8_t tmid_rx_buffer[TMID_CODED_BYTES];
 static uint8_t tmid_rx_count;
+static uint8_t tmid_rx_idle_ticks;
 static bool tmid_rx_armed;
 static bool tmid_rx_capturing;
 static bool tmid_irq_mask_saved;
@@ -580,10 +581,9 @@ void TMID_RxService(void)
 /* Called at the firmware's 10 ms cadence, not from the tight main-loop spin. */
 void TMID_RxTimeSlice10ms(void)
 {
-    static uint8_t idle_ticks;
     if (!tmid_rx_armed || !tmid_mode_selected() ||
         gCurrentFunction == FUNCTION_TRANSMIT) {
-        idle_ticks = 0;
+        tmid_rx_idle_ticks = 0;
         return;
     }
 
@@ -598,17 +598,17 @@ void TMID_RxTimeSlice10ms(void)
     }
 
     if (!tmid_rx_capturing) {
-        idle_ticks = 0;
+        tmid_rx_idle_ticks = 0;
         return;
     }
-    if (idle_ticks < 150u)
-        ++idle_ticks;
-    if (idle_ticks >= 150u) {
+    if (tmid_rx_idle_ticks < 150u)
+        ++tmid_rx_idle_ticks;
+    if (tmid_rx_idle_ticks >= 150u) {
         /* Some BK4819 locks lose bit clock before RX_FINISHED is raised. */
         tmid_rx_read_fifo(8u);
         tmid_rx_finish();
         tmid_rx_restart_capture();
-        idle_ticks = 0;
+        tmid_rx_idle_ticks = 0;
     }
 }
 
@@ -659,11 +659,13 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
         tmid_diag_increment(&tmid_diag_sync);
         gUpdateDisplay = true;
         tmid_rx_count = 0;
+        tmid_rx_idle_ticks = 0;
         tmid_rx_capturing = true;
     }
     if ((interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) &&
         tmid_rx_capturing) {
         tmid_diag_increment(&tmid_diag_fifo);
+        tmid_rx_idle_ticks = 0;
         tmid_rx_read_fifo(4u);
     }
     if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
