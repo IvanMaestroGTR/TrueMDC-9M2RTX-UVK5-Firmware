@@ -1472,10 +1472,11 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
             }
         }
 
-        if (UI_MENU_GetCurrentMenuId() == MENU_UPCODE
-            || UI_MENU_GetCurrentMenuId() == MENU_DWCODE
+        if (
             #ifdef ENABLE_DTMF_CALLING
-            || UI_MENU_GetCurrentMenuId() == MENU_ANI_ID
+            UI_MENU_GetCurrentMenuId() == MENU_ANI_ID
+            #else
+            false
             #endif
             #ifndef ENABLE_MDC1200_EDIT
             || UI_MENU_GetCurrentMenuId() == MENU_MDC_ID
