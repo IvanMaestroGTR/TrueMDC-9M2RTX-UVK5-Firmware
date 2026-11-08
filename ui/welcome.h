@@ -19,7 +19,6 @@
 #include "helper/boot.h"
 //void UI_DisplayReleaseKeys(BOOT_Mode_t BootMode);
 void UI_DisplayWelcome(void);
-void UI_DisplayWelcomeIds(void);
 
 #endif
 
