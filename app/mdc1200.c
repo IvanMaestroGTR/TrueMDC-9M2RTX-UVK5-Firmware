@@ -436,6 +436,8 @@ static uint8_t tmid_rx_buffer[TMID_CODED_BYTES];
 static uint8_t tmid_rx_count;
 static bool tmid_rx_armed;
 static bool tmid_rx_capturing;
+static bool tmid_irq_mask_saved;
+static uint16_t tmid_saved_irq_mask;
 
 static bool tmid_mode_selected(void)
 {
@@ -480,6 +482,10 @@ static void tmid_rx_stop(void)
     BK4819_WriteRegister(BK4819_REG_59, 0u);
     BK4819_WriteRegister(BK4819_REG_58, 0u);
     BK4819_WriteRegister(BK4819_REG_70, 0u);
+    if (tmid_irq_mask_saved) {
+        BK4819_WriteRegister(BK4819_REG_3F, tmid_saved_irq_mask);
+        tmid_irq_mask_saved = false;
+    }
     tmid_rx_armed = false;
     tmid_rx_capturing = false;
     tmid_rx_count = 0;
@@ -491,8 +497,13 @@ void TMID_RxService(void)
         tmid_rx_stop();
         return;
     }
-    if (!tmid_rx_armed)
+    if (!tmid_rx_armed) {
+        if (!tmid_irq_mask_saved) {
+            tmid_saved_irq_mask = BK4819_ReadRegister(BK4819_REG_3F);
+            tmid_irq_mask_saved = true;
+        }
         tmid_rx_arm();
+    }
 }
 
 static void tmid_rx_finish(void)
