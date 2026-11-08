@@ -318,6 +318,8 @@ char tmid_rx_callsign[7];
 uint8_t tmid_rx_ssid;
 
 #define TMID_INFO_BITS (TMID_DATA_BYTES * 8u)
+#define TMID_CODED_BITS TMID_CODE_BITS
+#define TMID_PARITY_OFFSET (TMID_STREAM_BYTES * 8u)
 #define TMID_POLY 0x65u
 #define TMID_METRIC_INF 0x3FFFu
 
@@ -347,15 +349,15 @@ void TMID_EncodePayload(const uint8_t input[TMID_DATA_BYTES],
 {
     uint8_t state = 0;
     memset(output, 0, TMID_CODED_BYTES);
-    for (unsigned int t = 0; t < TMID_INFO_BITS; ++t) {
-        const uint8_t bit = (input[t >> 3] >> (t & 7u)) & 1u;
+    for (unsigned int t = 0; t < TMID_CODED_BITS; ++t) {
+        const uint8_t bit = (t < TMID_INFO_BITS) ? ((input[t >> 3] >> (t & 7u)) & 1u) : 0u;
         const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
         const uint8_t parity = tmid_parity(reg);
         if (bit)
             output[t >> 3] |= (uint8_t)(1u << (t & 7u));
         if (parity)
-            output[(TMID_INFO_BITS + t) >> 3] |=
-                (uint8_t)(1u << ((TMID_INFO_BITS + t) & 7u));
+            output[(TMID_PARITY_OFFSET + t) >> 3] |=
+                (uint8_t)(1u << ((TMID_PARITY_OFFSET + t) & 7u));
         state = reg & 0x3Fu;
     }
 }
@@ -364,14 +366,14 @@ bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
                         uint8_t output[TMID_DATA_BYTES])
 {
     uint16_t metric[64], next_metric[64];
-    uint8_t decisions[TMID_INFO_BITS][8];
+    uint8_t decisions[TMID_CODED_BITS][8];
     for (unsigned int s = 0; s < 64u; ++s)
         metric[s] = (s == 0u) ? 0u : TMID_METRIC_INF;
     memset(decisions, 0, sizeof(decisions));
 
-    for (unsigned int t = 0; t < TMID_INFO_BITS; ++t) {
+    for (unsigned int t = 0; t < TMID_CODED_BITS; ++t) {
         const uint8_t sys = (input[t >> 3] >> (t & 7u)) & 1u;
-        const unsigned int pt = TMID_INFO_BITS + t;
+        const unsigned int pt = TMID_PARITY_OFFSET + t;
         const uint8_t par = (input[pt >> 3] >> (7u - (pt & 7u))) & 1u;
         for (unsigned int ns = 0; ns < 64u; ++ns) {
             const uint8_t bit = ns & 1u;
