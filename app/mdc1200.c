@@ -516,14 +516,31 @@ void TMID_RxService(void)
 static void tmid_rx_finish(void)
 {
     uint8_t decoded[TMID_DATA_BYTES];
-    if (tmid_rx_count == TMID_CODED_BYTES &&
-        TMID_DecodePayload(tmid_rx_buffer, decoded)) {
+    bool valid = false;
+
+    if (tmid_rx_count == TMID_CODED_BYTES) {
+        valid = TMID_DecodePayload(tmid_rx_buffer, decoded);
+
+        /*
+         * Some BK4819 revisions report SyncN/SyncP differently.
+         * CRC-16 makes a polarity retry safe: accept only a complete
+         * Viterbi decode with a valid TMID payload and CRC.
+         */
+        if (!valid) {
+            for (unsigned int i = 0; i < TMID_CODED_BYTES; ++i)
+                tmid_rx_buffer[i] ^= 0xFFu;
+            valid = TMID_DecodePayload(tmid_rx_buffer, decoded);
+        }
+    }
+
+    if (valid) {
         memcpy(tmid_rx_callsign, decoded + 1u, 6u);
         tmid_rx_callsign[6] = '\0';
         tmid_rx_ssid = (uint8_t)(decoded[7] - '0');
         mdc1200_rx_ready_tick_500ms = 10u;
         gUpdateDisplay = true;
     }
+
     tmid_rx_count = 0;
     tmid_rx_capturing = false;
 }
