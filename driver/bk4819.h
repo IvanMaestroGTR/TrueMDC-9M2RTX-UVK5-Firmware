@@ -172,7 +172,7 @@ uint8_t  BK4819_GetCTCType(void);
 void     BK4819_SendFSKData(uint16_t *pData);
 void     BK4819_PrepareFSKReceive(void);
 void BK4819_PlayRoger(void);
-void BK4819_SendCallsignBeacon(const bool with_preamble);
+void BK4819_SendTMIDBeacon(const bool with_preamble);
 
 #ifdef ENABLE_LEGACY_ROGER_BEEPS
 void     BK4819_PlayRogerOne(void);
