@@ -295,7 +295,7 @@ void AM_fix_reset(const unsigned vfo)
 //
 void AM_fix_10ms(const unsigned vfo)
 {
-    if(!gSetting_AM_fix || !enabled || vfo > 1 )
+    if (!enabled || vfo > 1)
         return;
 
 switch (gCurrentFunction)

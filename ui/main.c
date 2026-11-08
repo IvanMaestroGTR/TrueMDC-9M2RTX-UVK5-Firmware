@@ -297,7 +297,7 @@ void DisplayRSSIBar(const bool now) {
         const int16_t rssi_dBm =
             BK4819_GetRSSI_dBm()
 #ifdef ENABLE_AM_FIX
-            + ((gSetting_AM_fix && gRxVfo->Modulation == MODULATION_AM) ? AM_fix_get_gain_diff() : 0)
+            + ((gRxVfo->Modulation == MODULATION_AM) ? AM_fix_get_gain_diff() : 0)
 #endif
             + dBmCorrTable[gRxVfo->Band];
 
@@ -800,22 +800,8 @@ void UI_DisplayMain(void) {
 
 #ifdef ENABLE_FMRADIO
             if (isFmVFO) {
-                const uint16_t status = BK1080_ReadRegister(BK1080_REG_10);
-                const uint8_t rssi = BK1080_REG_10_GET_RSSI(status);
-                static const uint8_t fm_small_rssi_thresholds[] = {
-                    20, // 2 bars
-                    35, // 3 bars
-                    50, // 4 bars
-                    65, // 5 bars
-                    80  // 6 bars / very strong signal
-                };
-
-                // Keep one bar as the noise-floor / no-signal indication.
-                Level = 1;
-                for (unsigned int i = 0; i < ARRAY_SIZE(fm_small_rssi_thresholds); i++) {
-                    if (rssi >= fm_small_rssi_thresholds[i])
-                        Level = i + 2;
-                }
+                // FM signal-strength bars intentionally disabled.
+                // Keep the FM radio and its receiver/RSSI functionality intact.
             } else
 #endif
             if (mode == VFO_MODE_TX) {    // TX power level
@@ -913,10 +899,6 @@ void UI_DisplayMain(void) {
         }
 
 #endif
-        // show the audio scramble symbol
-        if (!isFmVFO && vfoInfo->SCRAMBLING_TYPE > 0/* && gSetting_ScrambleEnable*/) {
-            UI_PrintStringSmall("ENC", LCD_WIDTH + 106, 0, line + 1);//中文信道1
-        }
     }
 #ifdef ENABLE_AGC_SHOW_DATA
     center_line = CENTER_LINE_IN_USE;
@@ -971,7 +953,7 @@ void UI_DisplayMain(void) {
 //#endif
 
 #if defined(ENABLE_AM_FIX) && defined(ENABLE_AM_FIX_SHOW_DATA)
-            if (rx && gEeprom.VfoInfo[gEeprom.RX_VFO].Modulation == MODULATION_AM && gSetting_AM_fix)
+            if (rx && gEeprom.VfoInfo[gEeprom.RX_VFO].Modulation == MODULATION_AM)
             {
                 if (gScreenToDisplay != DISPLAY_MAIN
 #ifdef ENABLE_DTMF_CALLING

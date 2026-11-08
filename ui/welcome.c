@@ -108,22 +108,3 @@ void UI_DisplayWelcome(void) {
     ST7565_BlitFullScreen();
 }
 
-void UI_DisplayWelcomeIds(void) {
-    char WelcomeString0[24] = {0};
-    char WelcomeString1[24] = {0};
-
-    memset(gStatusLine, 0, sizeof(gStatusLine));
-    memset(gFrameBuffer, 0, sizeof(gFrameBuffer));
-
-    if (gEeprom.FLEETSYNC_FLEET == 0 && gEeprom.FLEETSYNC_UNIT == 0 && gEeprom.MDC1200_ID == 0)
-        return;
-
-    snprintf(WelcomeString0, sizeof(WelcomeString0), "FLEET %u/%u", gEeprom.FLEETSYNC_FLEET, gEeprom.FLEETSYNC_UNIT);
-    snprintf(WelcomeString1, sizeof(WelcomeString1), "MDC %04X", gEeprom.MDC1200_ID);
-
-    UI_PrintStringSmall(WelcomeString0, 0, 127, 1);
-    UI_PrintStringSmall(WelcomeString1, 0, 127, 3);
-    ST7565_BlitStatusLine();
-    ST7565_BlitFullScreen();
-}
-

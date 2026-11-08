@@ -242,11 +242,6 @@ void RADIO_ConfigureChannel(const unsigned int VFO, const unsigned int configure
         pVfo->STEP_SETTING = tmp;
         pVfo->StepFrequency = gStepFrequencyTable[tmp];
 
-        tmp = data[7];
-        if (tmp > (ARRAY_SIZE(gSubMenu_SCRAMBLER) - 1))
-            tmp = 0;
-        pVfo->SCRAMBLING_TYPE = tmp;
-
         pVfo->freq_config_RX.CodeType = (data[2] >> 0) & 0x0F;
         pVfo->freq_config_TX.CodeType = (data[2] >> 4) & 0x0F;
 
@@ -704,10 +699,6 @@ void RADIO_SetupRegisters(bool switchToForeground) {
                     break;
             }
 
-            if (gRxVfo->SCRAMBLING_TYPE > 0 && gSetting_ScrambleEnable)
-                BK4819_EnableScramble(gRxVfo->SCRAMBLING_TYPE - 1);
-            else
-                BK4819_DisableScramble();
         }
     }
 #ifdef ENABLE_NOAA
@@ -823,12 +814,7 @@ void RADIO_SetTxParameters(void) {
             Bandwidth = BK4819_FILTER_BW_WIDE;
             [[fallthrough]];
         case BK4819_FILTER_BW_WIDE:
-#ifdef ENABLE_AM_FIX
-            //				BK4819_SetFilterBandwidth(Bandwidth, gCurrentVfo->Modulation == MODULATION_AM && gSetting_AM_fix);
-                BK4819_SetFilterBandwidth(Bandwidth, true);
-#else
-            BK4819_SetFilterBandwidth(Bandwidth, false);
-#endif
+            BK4819_SetFilterBandwidth(Bandwidth, true);
             break;
 
         case BK4819_FILTER_BW_NARROW:
@@ -930,16 +916,13 @@ void RADIO_SetupAGC(bool listeningAM, bool disable) {
         BK4819_InitAGC(false);
     } else {
 #ifdef ENABLE_AM_FIX
-        if(gSetting_AM_fix) { // if AM fix active lock AGC so AM-fix can do it's job
-            BK4819_SetAGC(0);
-            AM_fix_enable(!disable);
-        }
-        else
+        // AM always uses AM Fix; disable the BK4819 internal AGC.
+        BK4819_SetAGC(0);
+        AM_fix_enable(!disable);
+#else
+        BK4819_SetAGC(!disable);
+        BK4819_InitAGC(true);
 #endif
-        {
-            BK4819_SetAGC(!disable);
-            BK4819_InitAGC(true);
-        }
     }
 }
 

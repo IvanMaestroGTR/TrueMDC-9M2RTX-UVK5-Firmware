@@ -289,17 +289,13 @@ EEPROM_ReadBuffer(0x0EF0, Data, sizeof(gEeprom.REVIVE_CODE));
 //    gSetting_200TX             = (Data[3] < 2) ? Data[3] : false;
 //    gSetting_500TX             = (Data[4] < 2) ? Data[4] : false;
 //    gSetting_350EN             = (Data[5] < 2) ? Data[5] : true;
-    gSetting_ScrambleEnable    = (Data[6] < 2) ? Data[6] : true;
     //gSetting_TX_EN             = (Data[7] & (1u << 0)) ? true : false;
     gSetting_live_DTMF_decoder = !!(Data[7] & (1u << 1));
     //gSetting_battery_text      = (((Data[7] >> 2) & 3u) <= 2) ? (Data[7] >> 2) & 3 : 2;
 //#ifdef ENABLE_AUDIO_BAR
     //gSetting_mic_bar       = (Data[7] & (1u << 4)) ? true : false;
 //#endif
-#ifdef ENABLE_AM_FIX
-    gSetting_AM_fix = !!(Data[7] & (1u << 5));
-#endif
-  //  gSetting_backlight_on_tx_rx = (Data[7] >> 6) & 3u;
+//  gSetting_backlight_on_tx_rx = (Data[7] >> 6) & 3u;
 
     if (!gEeprom.VFO_OPEN)
     {
@@ -683,15 +679,12 @@ void SETTINGS_SaveSettings(void)
 //    State[3]  = gSetting_200TX;
 //    State[4]  = gSetting_500TX;
 //    State[5]  = gSetting_350EN;
-    State[6]  = gSetting_ScrambleEnable;
+    State[6]  = 0xFF; // Reserved byte; scrambler removed.
     //if (!gSetting_TX_EN)             State[7] &= ~(1u << 0);
     if (!gSetting_live_DTMF_decoder) State[7] &= ~(1u << 1);
     State[7] = (State[7] & ~(3u << 2)) | ((0 & 3u) << 2);
 
-#ifdef ENABLE_AM_FIX
-    if (!gSetting_AM_fix)            State[7] &= ~(1u << 5);
-#endif
-    State[7] = (State[7] & ~(3u << 6)) | ((2 & 3u) << 6);
+State[7] = (State[7] & ~(3u << 6)) | ((2 & 3u) << 6);
 
     EEPROM_WriteBuffer(0x0F40, State,8);
 }
@@ -739,7 +732,7 @@ void SETTINGS_SaveChannel(uint8_t Channel, uint8_t VFO, const VFO_Info_t *pVFO, 
 #endif
                 ;
         State._8[6] =  pVFO->STEP_SETTING;
-        State._8[7] =  pVFO->SCRAMBLING_TYPE;
+        State._8[7] = 0xFF; // Reserved byte; scrambler removed.
         EEPROM_WriteBuffer(OffsetVFO + 8, State._8,8);
 
         SETTINGS_UpdateChannel(Channel, pVFO, true);
