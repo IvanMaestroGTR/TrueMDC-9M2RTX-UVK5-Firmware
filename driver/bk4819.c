@@ -373,48 +373,41 @@ void BK4819_InitAGC(bool amModulation) {
 
 
 /*
- * Minimal APRS AX.25 status frame for PTT identification.
- * Bell 202 AFSK: 1200 Hz mark, 2200 Hz space, 1200 symbols/s.
- * Frame: APRS>9M2RTX with status text; no position is fabricated.
+ * TrueMDC one-way callsign beacon.
+ * 1200-baud AFSK: 1200 Hz = 1, 2200 Hz = 0.
+ * Packet: D3 91 D3 91 sync, six ASCII callsign bytes, one ASCII SSID digit,
+ * then CRC-16/ARC (little-endian). No AX.25, HDLC flags, NRZI or bit stuffing.
+ * The existing 2200/1200-Hz warble preamble is intentionally preserved.
  */
-void BK4819_SendAX25PTTID(const bool with_preamble)
+void BK4819_SendCallsignBeacon(const bool with_preamble)
 {
-    uint8_t frame[32];
-    uint8_t n = 0;
+    uint8_t frame[13];
     uint16_t crc = 0xFFFFu;
     uint16_t saved_reg30;
-    uint8_t nrzi = 1u, tone_mark = 1u, ones = 0u;
+    uint8_t tone_mark = 2u;
     const uint16_t mark = scale_freq(1200u);
     const uint16_t space = scale_freq(2200u);
     const uint32_t bit_ticks_q8 = 39870u << 8;
     const uint32_t reload = SysTick->LOAD + 1u;
-    uint32_t acc_q8 = 0, last;
+    uint32_t acc_q8 = 0u, last;
     const uint32_t primask = __get_PRIMASK();
+    static const uint8_t sync[4] = {0xD3u, 0x91u, 0xD3u, 0x91u};
 
-    {
-        static const char dest[] = "APRS  ";
-        for (unsigned int i = 0; i < 6; ++i) frame[n++] = (uint8_t)dest[i] << 1;
-        frame[n++] = 0x60u;
-        for (unsigned int i = 0; i < 6; ++i)
-            frame[n++] = (uint8_t)gEeprom.AX25_CALLSIGN[i] << 1;
-        frame[n++] = (uint8_t)(0x61u | ((gEeprom.AX25_SSID & 0x0Fu) << 1));
-    }
-    frame[n++] = 0x03u;
-    frame[n++] = 0xF0u;
-    frame[n++] = '>';
-    for (unsigned int i = 0; i < 6 && gEeprom.AX25_CALLSIGN[i] != ' '; ++i)
-        frame[n++] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
-    frame[n++] = '-';
-    frame[n++] = (uint8_t)(gEeprom.AX25_SSID < 10u ? '0' + gEeprom.AX25_SSID : 'A' + gEeprom.AX25_SSID - 10u);
+    for (unsigned int i = 0; i < 4u; ++i)
+        frame[i] = sync[i];
+    for (unsigned int i = 0; i < 6u; ++i)
+        frame[4u + i] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
+    frame[10] = (uint8_t)('0' + (gEeprom.AX25_SSID % 10u));
 
-    for (unsigned int i = 0; i < n; ++i) {
+    /* CRC-16/ARC over the seven-byte callsign + SSID payload. */
+    for (unsigned int i = 4u; i < 11u; ++i) {
         crc ^= frame[i];
-        for (unsigned int b = 0; b < 8; ++b)
-            crc = (crc & 1u) ? (crc >> 1) ^ 0x8408u : crc >> 1;
+        for (unsigned int b = 0; b < 8u; ++b)
+            crc = (crc & 1u) ? (uint16_t)((crc >> 1) ^ 0xA001u)
+                             : (uint16_t)(crc >> 1);
     }
-    crc ^= 0xFFFFu;
-    frame[n++] = (uint8_t)crc;
-    frame[n++] = (uint8_t)(crc >> 8);
+    frame[11] = (uint8_t)(crc & 0xFFu);
+    frame[12] = (uint8_t)(crc >> 8);
 
     saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
     BK4819_EnterTxMute();
@@ -428,7 +421,7 @@ void BK4819_SendAX25PTTID(const bool with_preamble)
     __disable_irq();
     last = SysTick->VAL;
 
-#define AX25_WAIT_SYMBOL() do { \
+#define BEACON_WAIT_SYMBOL() do { \
         for (;;) { \
             const uint32_t now = SysTick->VAL; \
             const uint32_t d = (last >= now) ? (last - now) : (last + reload - now); \
@@ -436,68 +429,39 @@ void BK4819_SendAX25PTTID(const bool with_preamble)
             if (acc_q8 >= bit_ticks_q8) { acc_q8 -= bit_ticks_q8; break; } \
         } \
     } while (0)
-#define AX25_SEND_RAW_BIT(v) do { \
-        const uint8_t bit_ = (uint8_t)(v); \
-        if (bit_ == 0u) nrzi ^= 1u; \
-        if (nrzi != tone_mark) { \
-            BK4819_WriteRegister(BK4819_REG_71, nrzi ? mark : space); \
-            tone_mark = nrzi; \
-        } \
-        AX25_WAIT_SYMBOL(); \
-    } while (0)
-#define AX25_SEND_FLAG() do { \
-        const uint8_t flag_ = 0x7Eu; \
-        for (unsigned int fb_ = 0; fb_ < 8; ++fb_) \
-            AX25_SEND_RAW_BIT((flag_ >> fb_) & 1u); \
-    } while (0)
-
-#ifdef ENABLE_MDC1200
-#define AX25_SEND_MDC_SYMBOL(v) do { \
+#define BEACON_SEND_SYMBOL(v) do { \
         const uint8_t symbol_ = (uint8_t)(v); \
         if (symbol_ != tone_mark) { \
             BK4819_WriteRegister(BK4819_REG_71, symbol_ ? mark : space); \
             tone_mark = symbol_; \
         } \
-        AX25_WAIT_SYMBOL(); \
+        BEACON_WAIT_SYMBOL(); \
     } while (0)
-#define AX25_SEND_MDC_PREAMBLE() do { \
-        tone_mark = 2u; /* force the first 2200-Hz write after any AX.25 tone */ \
-        if (with_preamble && gEeprom.MDC1200_PREAMBLE_DURATION > 1u) { \
-            for (unsigned int c_ = 0; c_ < gEeprom.MDC1200_PREAMBLE_DURATION; ++c_) { \
-                for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
-                for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
-            } \
-        } else { \
-            /* Off placement keeps the normal single preamble, not silence. */ \
-            for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
-            for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
-        } \
+#define BEACON_SEND_BYTE(v) do { \
+        const uint8_t byte_ = (uint8_t)(v); \
+        for (unsigned int bit_ = 0; bit_ < 8u; ++bit_) \
+            BEACON_SEND_SYMBOL((byte_ >> bit_) & 1u); \
     } while (0)
-    AX25_SEND_MDC_PREAMBLE();
-    /* AX.25 HDLC flags are still mandatory; the 2200/1200-Hz tone lead-in
-     * replaces the long 20-flag audible bit-sync run, not frame sync. */
-    for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
-#else
-    for (unsigned int f = 0; f < 20u; ++f) AX25_SEND_FLAG();
-#endif
-    for (unsigned int i = 0; i < n; ++i) {
-        for (unsigned int b = 0; b < 8u; ++b) {
-            const uint8_t bit = (frame[i] >> b) & 1u;
-            AX25_SEND_RAW_BIT(bit);
-            if (bit) {
-                if (++ones == 5u) { AX25_SEND_RAW_BIT(0u); ones = 0u; }
-            } else ones = 0u;
-        }
-    }
-    for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
-#ifdef ENABLE_MDC1200
-#undef AX25_SEND_MDC_PREAMBLE
-#undef AX25_SEND_MDC_SYMBOL
-#endif
 
-#undef AX25_SEND_FLAG
-#undef AX25_SEND_RAW_BIT
-#undef AX25_WAIT_SYMBOL
+    /* Keep the existing warble pattern and configured cycle count unchanged. */
+    tone_mark = 2u;
+    if (with_preamble && gEeprom.MDC1200_PREAMBLE_DURATION > 1u) {
+        for (unsigned int cycle = 0; cycle < gEeprom.MDC1200_PREAMBLE_DURATION; ++cycle) {
+            for (unsigned int p = 0; p < 33u; ++p) BEACON_SEND_SYMBOL(0u);
+            for (unsigned int p = 0; p < 20u; ++p) BEACON_SEND_SYMBOL(1u);
+        }
+    } else {
+        for (unsigned int p = 0; p < 20u; ++p) BEACON_SEND_SYMBOL(0u);
+        for (unsigned int p = 0; p < 33u; ++p) BEACON_SEND_SYMBOL(1u);
+    }
+
+    for (unsigned int i = 0; i < sizeof(frame); ++i)
+        BEACON_SEND_BYTE(frame[i]);
+
+#undef BEACON_SEND_BYTE
+#undef BEACON_SEND_SYMBOL
+#undef BEACON_WAIT_SYMBOL
+
     if (!primask) __enable_irq();
 
     BK4819_EnterTxMute();
@@ -512,9 +476,9 @@ void BK4819_PlayRoger(void) {
         BK4819_MuteMic();
         SYSTEM_DelayMs(50);
 #ifdef ENABLE_MDC1200
-        BK4819_SendAX25PTTID(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_PRE);
+        BK4819_SendCallsignBeacon(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_PRE);
 #else
-        BK4819_SendAX25PTTID(false);
+        BK4819_SendCallsignBeacon(false);
 #endif
     }
 #ifdef ENABLE_MDC1200
