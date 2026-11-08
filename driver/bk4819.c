@@ -2676,7 +2676,7 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
         BK4819_ExitTxMute();
 
         {
-            const uint32_t bit_ticks_q8 = MDC_TX_BIT_TICKS << 8;
+            const uint32_t bit_ticks_q8 = FSK_TX_BIT_TICKS << 8;
             const uint32_t reload       = SysTick->LOAD + 1u;
             const uint16_t reg71_1200   = scale_freq(1200u);
             const uint16_t reg71_1800   = scale_freq(1800u);
