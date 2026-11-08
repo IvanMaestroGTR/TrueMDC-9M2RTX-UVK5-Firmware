@@ -447,6 +447,12 @@ volatile uint8_t tmid_diag_finished;
 volatile uint8_t tmid_diag_bytes;
 volatile char tmid_diag_result = '-';
 
+static void tmid_diag_increment(volatile uint8_t *value)
+{
+    if (*value < 99u)
+        ++*value;
+}
+
 
 static bool tmid_mode_selected(void)
 {
@@ -596,18 +602,18 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
     if (!tmid_rx_armed)
         return;
     if (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) {
-        ++tmid_diag_sync;
+        tmid_diag_increment(&tmid_diag_sync);
         gUpdateDisplay = true;
         tmid_rx_count = 0;
         tmid_rx_capturing = true;
     }
     if ((interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) &&
         tmid_rx_capturing) {
-        ++tmid_diag_fifo;
+        tmid_diag_increment(&tmid_diag_fifo);
         tmid_rx_read_fifo(4u);
     }
     if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
-        ++tmid_diag_finished;
+        tmid_diag_increment(&tmid_diag_finished);
         gUpdateDisplay = true;
         if (tmid_rx_capturing) {
             tmid_rx_read_fifo(8u);
