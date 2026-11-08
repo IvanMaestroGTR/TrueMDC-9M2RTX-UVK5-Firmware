@@ -574,6 +574,18 @@ void TMID_RxService(void)
             tmid_irq_mask_saved = true;
         }
         tmid_rx_arm();
+    } else {
+        /*
+         * Other radio setup paths can rewrite REG_3F after TMID is armed.
+         * Reassert only the three FSK receive interrupts, preserving every
+         * unrelated interrupt bit. This mirrors the proven APRS RX service.
+         */
+        const uint16_t required = BK4819_REG_3F_FSK_RX_SYNC |
+                                 BK4819_REG_3F_FSK_RX_FINISHED |
+                                 BK4819_REG_3F_FSK_FIFO_ALMOST_FULL;
+        const uint16_t mask = BK4819_ReadRegister(BK4819_REG_3F);
+        if ((mask & required) != required)
+            BK4819_WriteRegister(BK4819_REG_3F, mask | required);
     }
 }
 
