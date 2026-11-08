@@ -95,8 +95,6 @@ enum {
 #endif
 #endif
 
-    MENU_UPCODE,
-    MENU_DWCODE,
     MENU_D_ST,
 #ifdef ENABLE_DTMF_CALLING
     MENU_D_RSP,
