@@ -377,7 +377,7 @@ void BK4819_InitAGC(bool amModulation) {
  * Bell 202 AFSK: 1200 Hz mark, 2200 Hz space, 1200 symbols/s.
  * Frame: APRS>9M2RTX with status text; no position is fabricated.
  */
-void BK4819_SendAX25PTTID(void)
+void BK4819_SendAX25PTTID(const bool with_preamble)
 {
     uint8_t frame[32];
     uint8_t n = 0;
@@ -397,13 +397,15 @@ void BK4819_SendAX25PTTID(void)
         frame[n++] = 0x60u;
         for (unsigned int i = 0; i < 6; ++i)
             frame[n++] = (uint8_t)gEeprom.AX25_CALLSIGN[i] << 1;
-        frame[n++] = 0x61u;
+        frame[n++] = (uint8_t)(0x61u | ((gEeprom.AX25_SSID & 0x0Fu) << 1));
     }
     frame[n++] = 0x03u;
     frame[n++] = 0xF0u;
     frame[n++] = '>';
     for (unsigned int i = 0; i < 6 && gEeprom.AX25_CALLSIGN[i] != ' '; ++i)
         frame[n++] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
+    frame[n++] = '-';
+    frame[n++] = (uint8_t)(gEeprom.AX25_SSID < 10u ? '0' + gEeprom.AX25_SSID : 'A' + gEeprom.AX25_SSID - 10u);
 
     for (unsigned int i = 0; i < n; ++i) {
         crc ^= frame[i];
@@ -470,7 +472,7 @@ void BK4819_SendAX25PTTID(void)
             } \
         } \
     } while (0)
-    if (gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_POST)
+    if (with_preamble)
         AX25_SEND_MDC_PREAMBLE();
     /* AX.25 HDLC flags are still mandatory; the 2200/1200-Hz tone lead-in
      * replaces the long 20-flag audible bit-sync run, not frame sync. */
@@ -489,8 +491,6 @@ void BK4819_SendAX25PTTID(void)
     }
     for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
 #ifdef ENABLE_MDC1200
-    if (gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_PRE)
-        AX25_SEND_MDC_PREAMBLE();
 #undef AX25_SEND_MDC_PREAMBLE
 #undef AX25_SEND_MDC_SYMBOL
 #endif
@@ -511,7 +511,11 @@ void BK4819_PlayRoger(void) {
         gEeprom.PTT_ID == PTT_ID_MODE_AX25_BOTH) {
         BK4819_MuteMic();
         SYSTEM_DelayMs(50);
-        BK4819_SendAX25PTTID();
+#ifdef ENABLE_MDC1200
+        BK4819_SendAX25PTTID(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_PRE);
+#else
+        BK4819_SendAX25PTTID(false);
+#endif
     }
 #ifdef ENABLE_MDC1200
     if (BK4819_HasPostIDPTTID()) {
