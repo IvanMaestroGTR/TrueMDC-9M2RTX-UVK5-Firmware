@@ -543,6 +543,17 @@ static void tmid_rx_finish(void)
     tmid_rx_capturing = false;
 }
 
+static void tmid_rx_read_fifo(void)
+{
+    uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
+    while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
+        const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
+        tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
+        if (tmid_rx_count < TMID_CODED_BYTES)
+            tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
+    }
+}
+
 void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
 {
     if (!tmid_rx_armed)
@@ -553,25 +564,13 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
     }
     if ((interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) &&
         tmid_rx_capturing) {
-        uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
-        while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
-            uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
-            tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
-            if (tmid_rx_count < TMID_CODED_BYTES)
-                tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
-        }
+        tmid_rx_read_fifo();
         if (tmid_rx_count >= TMID_CODED_BYTES)
             tmid_rx_finish();
     }
     if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
         if (tmid_rx_capturing && tmid_rx_count < TMID_CODED_BYTES) {
-            uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
-            while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
-                uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
-                tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
-                if (tmid_rx_count < TMID_CODED_BYTES)
-                    tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
-            }
+            tmid_rx_read_fifo();
         }
         if (tmid_rx_capturing)
             tmid_rx_finish();
