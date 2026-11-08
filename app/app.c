@@ -86,16 +86,6 @@
 #include "ui/status.h"
 #include "ui/ui.h"
 
-static bool gRxEndTonePending;
-// A received signal on dual watch must return to alternating VFOs before its
-// call-end tone is played.  Otherwise the LED state changes made by the
-// alternate race the pending-tone indication.
-static bool gRxEndToneWaitForDualWatch;
-static bool gRxTalkPermitPlayed;
-static uint16_t gRxEndToneCountdown_10ms;
-#define CALL_END_TONE_DELAY_10MS 200
-#define CALL_END_TONE_AFTER_TX_DELAY_10MS 300
-#define CALL_END_TONE_DUAL_WATCH_DELAY_10MS 5
 static bool flagSaveVfo;
 static bool flagSaveSettings;
 static bool flagSaveChannel;
@@ -369,13 +359,6 @@ static void HandleReceive(void) {
         case END_OF_RX_MODE_END:
             RADIO_SetupRegisters(true);
 
-            if (gRxVfo->Modulation == MODULATION_FM &&
-                gEeprom.END_CALL_TONE && gEeprom.BOOT_BEEP_CONTROL) {
-                gRxEndTonePending = true;
-                gRxEndToneWaitForDualWatch =
-                    gEeprom.DUAL_WATCH != DUAL_WATCH_OFF && gScanStateDir == SCAN_OFF;
-                gRxEndToneCountdown_10ms = CALL_END_TONE_DELAY_10MS;
-            }
 
 #ifdef ENABLE_NOAA
             if (IS_NOAA_CHANNEL(gRxVfo->CHANNEL_SAVE))
@@ -710,25 +693,6 @@ static void CheckRadioInterrupts(void) {
 }
 
 
-static void APP_ScheduleCallEndToneAfterTx(void) {
-    if (gRxVfo->Modulation == MODULATION_FM &&
-        gEeprom.END_CALL_TONE && gEeprom.BOOT_BEEP_CONTROL) {
-        gRxEndTonePending = true;
-        gRxEndToneCountdown_10ms = CALL_END_TONE_AFTER_TX_DELAY_10MS;
-        gRxEndToneWaitForDualWatch = false;
-    }
-}
-
-static void APP_PlayCallEndTone(void) {
-    BK4819_ResetTalkPermitToneState();
-    BK4819_PlayRxEndTone();
-    gRxEndTonePending = false;
-    gRxEndToneWaitForDualWatch = false;
-    gRxEndToneCountdown_10ms = 0;
-    BK4819_ToggleGpioOut(BK4819_GPIO5_PIN1_RED, false);
-    BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, false);
-}
-
 void APP_EndTransmission(bool inmediately) {
     BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, false); // Turn off TX Green light    
     // back to RX mode
@@ -738,7 +702,6 @@ void APP_EndTransmission(bool inmediately) {
         gFlagReconfigureVfos = true;
     }
     FUNCTION_Select(FUNCTION_FOREGROUND);//OK
-    APP_ScheduleCallEndToneAfterTx();
 }
 
 #ifdef ENABLE_VOX
@@ -1108,37 +1071,6 @@ void APP_TimeSlice10ms(void) {
     static uint16_t powerSaveLedCounter = 0;
     static uint16_t rxBlinkCounter = 0;
 
-    if (gRxEndTonePending) {
-        if (!gEeprom.END_CALL_TONE || !gEeprom.BOOT_BEEP_CONTROL ||
-            gFlagPrepareTX || gCurrentFunction == FUNCTION_TRANSMIT ||
-            gRxVfo->Modulation != MODULATION_FM || g_SquelchLost) {
-            gRxEndTonePending = false;
-            gRxEndToneWaitForDualWatch = false;
-            gRxEndToneCountdown_10ms = 0;
-            BK4819_ToggleGpioOut(BK4819_GPIO5_PIN1_RED, false);
-            BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, false);
-        } else if (gRxEndToneCountdown_10ms > 0) {
-            gRxEndToneCountdown_10ms--;
-            if (gRxEndToneCountdown_10ms == 0) {
-                if (gRxEndToneWaitForDualWatch) {
-                    if (gDualWatchActive) {
-                        gRxEndToneWaitForDualWatch = false;
-                        gRxEndToneCountdown_10ms = CALL_END_TONE_DUAL_WATCH_DELAY_10MS;
-                    }
-                } else {
-                    APP_PlayCallEndTone();
-                }
-            }
-        } else if (gRxEndToneWaitForDualWatch) {
-            if (gDualWatchActive) {
-                gRxEndToneWaitForDualWatch = false;
-                gRxEndToneCountdown_10ms = CALL_END_TONE_DUAL_WATCH_DELAY_10MS;
-            }
-        } else {
-            APP_PlayCallEndTone();
-        }
-    }
-
     // --- STANDBY BREATHING LIGHT LOGIC ---
     if (gCurrentFunction == FUNCTION_POWER_SAVE) {
         powerSaveLedCounter++;
@@ -1193,7 +1125,7 @@ void APP_TimeSlice10ms(void) {
     
     // --- RX Green Light Logic (configurable via RX_LIGHT_MODE) ---
     // Only manage RX light when NOT in POWER_SAVE mode (power save manages its own breathing light)
-    if (gCurrentFunction != FUNCTION_POWER_SAVE && !gRxEndTonePending) {
+    if (gCurrentFunction != FUNCTION_POWER_SAVE) {
         if (g_SquelchLost && gCurrentFunction != FUNCTION_TRANSMIT) {
             switch (gEeprom.RX_LIGHT_MODE) {
                 case RX_LIGHT_MODE_OFF:
@@ -1232,15 +1164,6 @@ void APP_TimeSlice10ms(void) {
         }
     } else {
         rxBlinkCounter = 0;
-    }
-
-    // The call-status indicator is yellow (red + green).  With dual watch it
-    // remains on only until the first alternate; the pending-tone logic above
-    // then turns it off and plays the end tone in that same transition.
-    if (gRxEndTonePending &&
-        (!gRxEndToneWaitForDualWatch || !gDualWatchActive)) {
-        BK4819_ToggleGpioOut(BK4819_GPIO5_PIN1_RED, true);
-        BK4819_ToggleGpioOut(BK4819_GPIO6_PIN2_GREEN, true);
     }
 
 #ifdef ENABLE_MESSENGER
@@ -1365,7 +1288,6 @@ gAlarmState = ALARM_STATE_SITE_ALARM;
         if (gRTTECountdown_10ms > 0) {
             if (--gRTTECountdown_10ms == 0) {
                 FUNCTION_Select(FUNCTION_FOREGROUND); //OK
-                APP_ScheduleCallEndToneAfterTx();
                 gUpdateStatus = true;
                 gUpdateDisplay = true;
             }
