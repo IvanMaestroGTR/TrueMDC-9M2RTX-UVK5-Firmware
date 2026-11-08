@@ -376,7 +376,7 @@ void BK4819_InitAGC(bool amModulation) {
  * TrueMDC one-way callsign beacon.
  * 1200-baud AFSK: 1200 Hz = 1, 2200 Hz = 0.
  * Packet: D3 91 D3 91 sync, six ASCII callsign bytes, one ASCII SSID digit,
- * then CRC-16/ARC (little-endian). No AX.25, HDLC flags, NRZI or bit stuffing.
+ * then CRC-16/MODBUS (little-endian). No AX.25, HDLC flags, NRZI or bit stuffing.
  * The existing 2200/1200-Hz warble preamble is intentionally preserved.
  */
 void BK4819_SendCallsignBeacon(const bool with_preamble)
@@ -399,7 +399,7 @@ void BK4819_SendCallsignBeacon(const bool with_preamble)
         frame[4u + i] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
     frame[10] = (uint8_t)('0' + (gEeprom.AX25_SSID % 10u));
 
-    /* CRC-16/ARC over the seven-byte callsign + SSID payload. */
+    /* CRC-16/MODBUS over the seven-byte callsign + SSID payload. */
     for (unsigned int i = 4u; i < 11u; ++i) {
         crc ^= frame[i];
         for (unsigned int b = 0; b < 8u; ++b)
