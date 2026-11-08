@@ -440,6 +440,19 @@ static bool tmid_rx_capturing;
 static bool tmid_irq_mask_saved;
 static uint16_t tmid_saved_irq_mask;
 
+/* Small receive-stage counters exposed on the main screen while TMID is selected. */
+volatile uint8_t tmid_diag_sync;
+volatile uint8_t tmid_diag_fifo;
+volatile uint8_t tmid_diag_finished;
+volatile uint8_t tmid_diag_bytes;
+volatile char tmid_diag_result = '-';
+
+static void tmid_diag_increment(volatile uint8_t *value)
+{
+    if (*value < 99u)
+        ++*value;
+}
+
 static bool tmid_mode_selected(void)
 {
     return gEeprom.PTT_ID == PTT_ID_MODE_TMID_PRE ||
@@ -463,6 +476,11 @@ static void tmid_rx_restart_capture(void)
 
 static void tmid_rx_arm(void)
 {
+    tmid_diag_sync = 0;
+    tmid_diag_fifo = 0;
+    tmid_diag_finished = 0;
+    tmid_diag_bytes = 0;
+    tmid_diag_result = '-';
     /*
      * Match the proven TA1JS UV-K5 APRS Bell-202 receiver configuration.
      * TMID keeps its own A5 A5 sync, FEC and CRC. Configure the BK4819
@@ -531,6 +549,7 @@ static void tmid_rx_finish(void)
 {
     uint8_t decoded[TMID_DATA_BYTES];
     bool valid = false;
+    tmid_diag_bytes = tmid_rx_count;
 
     if (tmid_rx_count == TMID_CODED_BYTES) {
         valid = TMID_DecodePayload(tmid_rx_buffer, decoded);
@@ -548,11 +567,14 @@ static void tmid_rx_finish(void)
     }
 
     if (valid) {
+        tmid_diag_result = 'G';
         memcpy(tmid_rx_callsign, decoded + 1u, 6u);
         tmid_rx_callsign[6] = '\0';
         tmid_rx_ssid = (uint8_t)(decoded[7] - '0');
         mdc1200_rx_ready_tick_500ms = 10u;
         gUpdateDisplay = true;
+    } else {
+        tmid_diag_result = (tmid_rx_count == TMID_CODED_BYTES) ? 'C' : 'L';
     }
 
     tmid_rx_count = 0;
@@ -579,17 +601,23 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
     if (!tmid_rx_armed)
         return;
     if (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) {
+        tmid_diag_increment(&tmid_diag_sync);
         tmid_rx_count = 0;
         tmid_rx_capturing = true;
     }
     if ((interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) &&
         tmid_rx_capturing) {
+        tmid_diag_increment(&tmid_diag_fifo);
         tmid_rx_read_fifo(4u);
     }
     if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
+        tmid_diag_increment(&tmid_diag_finished);
         if (tmid_rx_capturing) {
             tmid_rx_read_fifo(8u);
             tmid_rx_finish();
+        } else {
+            tmid_diag_bytes = 0;
+            tmid_diag_result = 'N';
         }
         /* Keep the RX/squelch DSP running; restart only the FSK capture. */
         tmid_rx_restart_capture();
