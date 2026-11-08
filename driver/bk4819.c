@@ -462,14 +462,15 @@ void BK4819_SendAX25PTTID(const bool with_preamble)
     } while (0)
 #define AX25_SEND_MDC_PREAMBLE() do { \
         tone_mark = 2u; /* force the first 2200-Hz write after any AX.25 tone */ \
-        if (gEeprom.MDC1200_PREAMBLE_DURATION <= 1u) { \
-            for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
-            for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
-        } else { \
+        if (with_preamble) { \
             for (unsigned int c_ = 0; c_ < gEeprom.MDC1200_PREAMBLE_DURATION; ++c_) { \
                 for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
                 for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
             } \
+        } else { \
+            /* Off placement keeps the normal single preamble, not silence. */ \
+            for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
+            for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
         } \
     } while (0)
     if (with_preamble)
