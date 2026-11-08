@@ -602,6 +602,7 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
         return;
     if (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) {
         tmid_diag_increment(&tmid_diag_sync);
+        gUpdateDisplay = true;
         tmid_rx_count = 0;
         tmid_rx_capturing = true;
     }
@@ -612,6 +613,7 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
     }
     if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
         tmid_diag_increment(&tmid_diag_finished);
+        gUpdateDisplay = true;
         if (tmid_rx_capturing) {
             tmid_rx_read_fifo(8u);
             tmid_rx_finish();
