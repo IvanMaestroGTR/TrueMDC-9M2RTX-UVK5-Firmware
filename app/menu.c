@@ -1223,7 +1223,7 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
                         now_menu == MENU_AX25_CALLSIGN ? 8 :
                         now_menu == MENU_FLEETSYNC_UNIT ? 8 : 4;
 #else
-    uint8_t end_index = (now_menu == MENU_AX25_CALLSIGN) ? 6 : MAX_EDIT_INDEX;
+    uint8_t end_index = (now_menu == MENU_AX25_CALLSIGN) ? 8 : MAX_EDIT_INDEX;
 #endif
     if ((now_menu == MENU_MEM_NAME //���뷨
 #ifdef ENABLE_MDC1200
