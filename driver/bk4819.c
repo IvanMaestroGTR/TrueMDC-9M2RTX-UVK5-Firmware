@@ -402,10 +402,11 @@ static void BK4819_TMIDEncodePayload(const uint8_t input[TMID_DATA_BYTES],
 
 /*
  * TrueMDC one-way callsign beacon.
- * 1200-baud AFSK: 1200 Hz = 1, 2200 Hz = 0.
+ * 1200-baud AFSK: 1200 Hz = 1, 1800 Hz = 0.
  * Packet: two-byte A5 A5 sync, version, six ASCII callsign bytes, one ASCII SSID digit,
  * CRC-16/MODBUS and rate-1/2 convolutional FEC. No HDLC or bit stuffing.
- * The existing 2200/1200-Hz warble preamble is intentionally preserved.
+ * The existing warble preamble sequence, placement and configured cycle count
+ * are intentionally preserved; only its two tone frequencies are changed.
  */
 void BK4819_SendTMIDBeacon(const bool with_preamble)
 {
@@ -415,7 +416,7 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
     uint16_t saved_reg30;
     uint8_t tone_mark = 2u;
     const uint16_t mark = scale_freq(1200u);
-    const uint16_t space = scale_freq(2200u);
+    const uint16_t space = scale_freq(1800u);
     const uint32_t bit_ticks_q8 = FSK_TX_BIT_TICKS << 8;
     const uint32_t reload = SysTick->LOAD + 1u;
     uint32_t acc_q8 = 0u, last;
