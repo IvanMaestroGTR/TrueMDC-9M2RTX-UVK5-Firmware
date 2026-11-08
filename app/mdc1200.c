@@ -447,24 +447,32 @@ static bool tmid_mode_selected(void)
            gEeprom.PTT_ID == PTT_ID_MODE_TMID_BOTH;
 }
 
+static void tmid_rx_restart_capture(void)
+{
+    /*
+     * Restart only the FSK FIFO after a packet. Do not power-cycle the RX
+     * DSP, rewrite the interrupt mask, or clear REG_02 here: those actions
+     * can discard a pending squelch-lost event and leave normal squelch
+     * state out of step with the receiver.
+     */
+    BK4819_WriteRegister(BK4819_REG_59, 0x4000u);
+    BK4819_WriteRegister(BK4819_REG_59, 0x1000u);
+    tmid_rx_count = 0;
+    tmid_rx_capturing = false;
+}
+
 static void tmid_rx_arm(void)
 {
     /*
      * Match the proven TA1JS UV-K5 APRS Bell-202 receiver configuration.
-     * It receives 1200/2200-Hz AFSK with the BK4819 FFSK 1200/1800 RX
-     * profile (not the 1200/2400 profile previously used here).
-     *
-     * TMID keeps its own A5 A5 sync, FEC and CRC. The transmitter's long
-     * 2200/1200 warble is not an AA/55 hardware preamble, so use the same
-     * minimal preamble selection as the working APRS receiver and let the
-     * configured two-byte sync acquire the frame. Hardware scrambling and
-     * CRC remain disabled.
+     * TMID keeps its own A5 A5 sync, FEC and CRC. Configure the BK4819
+     * once; packet completion uses tmid_rx_restart_capture() so ordinary
+     * RF squelch detection is not reset between packets.
      */
     BK4819_WriteRegister(BK4819_REG_02, 0u);
     BK4819_WriteRegister(BK4819_REG_3F, 0u);
     BK4819_RX_TurnOn();
 
-    /* Same RX gain / tone-2 path and 1200-baud timing as TA1JS APRS. */
     BK4819_WriteRegister(BK4819_REG_70, 0x80E0u);
     BK4819_WriteRegister(BK4819_REG_72, 0x3065u);
     BK4819_WriteRegister(BK4819_REG_58, 0x3FC3u);
@@ -482,12 +490,7 @@ static void tmid_rx_arm(void)
                    BK4819_REG_3F_FSK_FIFO_ALMOST_FULL);
     }
 
-    /* Proven APRS RX FIFO sequence: clear, then enable; 2-byte sync. */
-    BK4819_WriteRegister(BK4819_REG_59, 0x4000u);
-    BK4819_WriteRegister(BK4819_REG_59, 0x1000u);
-
-    tmid_rx_count = 0;
-    tmid_rx_capturing = false;
+    tmid_rx_restart_capture();
     tmid_rx_armed = true;
 }
 
@@ -586,8 +589,8 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
         }
         if (tmid_rx_capturing)
             tmid_rx_finish();
-        tmid_rx_armed = false;
-        tmid_rx_arm();
+        /* Keep the RX/squelch DSP running; restart only the FSK capture. */
+        tmid_rx_restart_capture();
     }
 }
 
