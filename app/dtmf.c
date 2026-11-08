@@ -437,27 +437,10 @@ bool DTMF_Reply(const bool delayed_sidetone) {
 #endif
         default:
         case DTMF_REPLY_NONE:
-            if (
-#ifdef ENABLE_DTMF_CALLING
-gDTMF_CallState != DTMF_CALL_STATE_NONE           ||
-#endif
-gEeprom.PTT_ID == PTT_ID_MODE_MDC_PRE ||
-gEeprom.PTT_ID == PTT_ID_MODE_MDC_POST ||
-gEeprom.PTT_ID == PTT_ID_MODE_MDC_BOTH ||
-gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
-gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
-gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_BOTH ||
-gEeprom.PTT_ID == PTT_ID_MODE_AX25_PRE ||
-gEeprom.PTT_ID == PTT_ID_MODE_AX25_POST ||
-gEeprom.PTT_ID == PTT_ID_MODE_AX25_BOTH ||
-gEeprom.PTT_ID == PTT_ID_MODE_OFF) {
-                gDTMF_ReplyState = DTMF_REPLY_NONE;
-                return false;
-            }
-
-            // send TX-UP DTMF
-            pString = gEeprom.DTMF_UP_CODE;
-            break;
+            // Automatic DTMF TX-UP PTT-ID has been removed.
+            // Manual DTMF keying is queued as DTMF_REPLY_ANI above.
+            gDTMF_ReplyState = DTMF_REPLY_NONE;
+            return false;
     }
 
     gDTMF_ReplyState = DTMF_REPLY_NONE;
