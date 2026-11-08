@@ -473,8 +473,7 @@ void BK4819_SendAX25PTTID(const bool with_preamble)
             for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
         } \
     } while (0)
-    if (with_preamble)
-        AX25_SEND_MDC_PREAMBLE();
+    AX25_SEND_MDC_PREAMBLE();
     /* AX.25 HDLC flags are still mandatory; the 2200/1200-Hz tone lead-in
      * replaces the long 20-flag audible bit-sync run, not frame sync. */
     for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
