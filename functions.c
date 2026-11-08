@@ -204,9 +204,9 @@ void FUNCTION_Transmit() {
         BK4819_MuteMic();
         SYSTEM_DelayMs(gEeprom.REPEATER_TAIL_TONE_ELIMINATION * 100);
 #ifdef ENABLE_MDC1200
-        BK4819_SendAX25PTTID(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_POST);
+        BK4819_SendCallsignBeacon(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_POST);
 #else
-        BK4819_SendAX25PTTID(false);
+        BK4819_SendCallsignBeacon(false);
 #endif
         BK4819_UnmuteMic();
         SYSTEM_DelayMs(20);
