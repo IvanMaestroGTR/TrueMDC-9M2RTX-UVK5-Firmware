@@ -297,7 +297,7 @@ void DisplayRSSIBar(const bool now) {
         const int16_t rssi_dBm =
             BK4819_GetRSSI_dBm()
 #ifdef ENABLE_AM_FIX
-            + ((gSetting_AM_fix && gRxVfo->Modulation == MODULATION_AM) ? AM_fix_get_gain_diff() : 0)
+            + ((gRxVfo->Modulation == MODULATION_AM) ? AM_fix_get_gain_diff() : 0)
 #endif
             + dBmCorrTable[gRxVfo->Band];
 
@@ -957,7 +957,7 @@ void UI_DisplayMain(void) {
 //#endif
 
 #if defined(ENABLE_AM_FIX) && defined(ENABLE_AM_FIX_SHOW_DATA)
-            if (rx && gEeprom.VfoInfo[gEeprom.RX_VFO].Modulation == MODULATION_AM && gSetting_AM_fix)
+            if (rx && gEeprom.VfoInfo[gEeprom.RX_VFO].Modulation == MODULATION_AM)
             {
                 if (gScreenToDisplay != DISPLAY_MAIN
 #ifdef ENABLE_DTMF_CALLING
