@@ -78,7 +78,7 @@ const t_menu_item MenuList[] =
                 {/*"ChDisp",*/ VOICE_ID_INVALID, MENU_MDF, STR_CHDISP}, // was "MDF"
                 {/*"BackLt",*/ VOICE_ID_INVALID, MENU_ABR, STR_BACKLT}, // was "ABR"
                 {/*"BLMax",*/  VOICE_ID_INVALID, MENU_ABR_MAX, STR_LIGHT},
-                {/*"Call",*/ VOICE_ID_INVALID, MENU_AX25_CALLSIGN, "Call"},
+                {/*"TMID",*/ VOICE_ID_INVALID, MENU_AX25_CALLSIGN, "TMID"},
 #ifdef ENABLE_MDC1200
                 {/*"MDCID",*/  VOICE_ID_INVALID, MENU_MDC_ID, MDC_ID},
  #ifdef ENABLE_FLEETSYNC
