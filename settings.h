@@ -214,7 +214,6 @@ typedef struct {
 
     uint8_t               field37_0x32;
     uint8_t               field38_0x33;
-    bool                  END_CALL_TONE;
 
 //    bool                  AUTO_KEYPAD_LOCK;
 #if defined(ENABLE_ALARM) || defined(ENABLE_TX1750)
