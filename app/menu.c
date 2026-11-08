@@ -232,10 +232,6 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax) {
             *pMax = ARRAY_SIZE(gSubMenu_STE) - 1;
             break;
 
-        case MENU_END_CALL_TONE:
-            *pMin = 0;
-            *pMax = ARRAY_SIZE(gSubMenu_OFF_ON) - 1;
-            break;
 #ifdef ENABLE_CUSTOM_SIDEFUNCTIONS
 
             case MENU_W_N:
@@ -578,11 +574,7 @@ void MENU_AcceptSetting(void) {
             gEeprom.TAIL_TONE_ELIMINATION = gSubMenuSelection;
             break;
 
-        case MENU_END_CALL_TONE:
-            gEeprom.END_CALL_TONE = gSubMenuSelection;
-            break;
-
-        case MENU_RP_STE:
+case MENU_RP_STE:
 #ifdef ENABLE_FLEETSYNC
             if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
                 gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
@@ -835,11 +827,7 @@ void MENU_ShowCurrentSetting(void) {
             gSubMenuSelection = gEeprom.SQUELCH_LEVEL;
             break;
 
-        case MENU_END_CALL_TONE:
-            gSubMenuSelection = gEeprom.END_CALL_TONE;
-            break;
-
-        case MENU_STEP:
+case MENU_STEP:
             gSubMenuSelection = FREQUENCY_GetSortedIdxFromStepIdx(gTxVfo->STEP_SETTING);
             break;
 
