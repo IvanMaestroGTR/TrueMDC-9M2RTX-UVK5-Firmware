@@ -310,9 +310,9 @@ const char *const gSubMenu_PTT_ID[] =
     "Pre FSync",
     "Post FSync",
     "Both FSync",
-    "Pre Call",
-    "Post Call",
-    "Both Call"
+    "Pre TMID",
+    "Post TMID",
+    "Both TMID"
 };
 
 #ifdef ENABLE_MDC1200
