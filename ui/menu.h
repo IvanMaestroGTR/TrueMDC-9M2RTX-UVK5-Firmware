@@ -112,9 +112,6 @@ enum {
     // MENU_VOL,
     //MENU_BAT_TXT,
     //MENU_AM,
-#ifdef ENABLE_AM_FIX
-    MENU_AM_FIX,
-#endif
 #ifdef ENABLE_AM_FIX_TEST1
     MENU_AM_FIX_TEST1,
 #endif
