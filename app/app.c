@@ -795,6 +795,10 @@ void APP_Update(void) {
         GUI_DisplayScreen();
     }
 
+#ifdef ENABLE_MDC1200
+    TMID_RxService();
+#endif
+
     if (gReducedService)
         return;
 
