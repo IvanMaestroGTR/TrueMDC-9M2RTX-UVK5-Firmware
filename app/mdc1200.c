@@ -437,6 +437,7 @@ static uint8_t tmid_rx_buffer[TMID_CODED_BYTES];
 static uint8_t tmid_rx_count;
 static bool tmid_rx_armed;
 static bool tmid_rx_capturing;
+static bool tmid_rx_inverted;
 static bool tmid_irq_mask_saved;
 static uint16_t tmid_saved_irq_mask;
 
@@ -449,13 +450,16 @@ static bool tmid_mode_selected(void)
 
 static void tmid_rx_arm(void)
 {
-    /* Bell-202 hardware FFSK setup based on the TA1JS APRS receiver. */
-    BK4819_WriteRegister(BK4819_REG_70, (1u << 15) | (1u << 7) | 96u);
-    BK4819_WriteRegister(BK4819_REG_71, 22714u); /* 2200 Hz */
-    BK4819_WriteRegister(BK4819_REG_72, 12389u); /* 1200 baud */
+    /*
+     * The BK4819 has no native 1200/2200 FFSK mode. Use its
+     * 1200/2400 receiver mode (closest supported mark/space pair)
+     * rather than the previous 1200/1800 setting. Keep the TX
+     * generator untouched: TMID still transmits 1200/2200 Hz.
+     */
+    BK4819_WriteRegister(BK4819_REG_70, 0u);
     BK4819_WriteRegister(BK4819_REG_58,
-        (1u << 13) | (7u << 10) | (3u << 8) |
-        (3u << 6) | (1u << 1) | 1u);
+        (1u << 13) | (4u << 10) | (3u << 8) |
+        (4u << 1) | 1u);
     BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
     BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u); /* disable hardware CRC */
     BK4819_WriteRegister(BK4819_REG_5D,
@@ -527,6 +531,13 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
     if (!tmid_rx_armed)
         return;
     if (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) {
+        /*
+         * BK4819 reports whether the matched sync was SyncP or SyncN.
+         * Match the existing MDC/FleetSync receive convention and undo
+         * the hardware's negative-sync polarity before feeding Viterbi.
+         */
+        const uint16_t sync_flags = BK4819_ReadRegister(BK4819_REG_0B);
+        tmid_rx_inverted = (sync_flags & (1u << 7)) != 0;
         tmid_rx_count = 0;
         tmid_rx_capturing = true;
     }
@@ -534,7 +545,9 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
         tmid_rx_capturing) {
         uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
         while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
-            const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
+            uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
+            if (tmid_rx_inverted)
+                word ^= 0xFFFFu;
             tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
             if (tmid_rx_count < TMID_CODED_BYTES)
                 tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
