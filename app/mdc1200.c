@@ -437,7 +437,6 @@ static uint8_t tmid_rx_buffer[TMID_CODED_BYTES];
 static uint8_t tmid_rx_count;
 static bool tmid_rx_armed;
 static bool tmid_rx_capturing;
-static bool tmid_rx_inverted;
 static bool tmid_irq_mask_saved;
 static uint16_t tmid_saved_irq_mask;
 
@@ -477,7 +476,6 @@ static void tmid_rx_arm(void)
     BK4819_WriteRegister(BK4819_REG_59, 0x1000u); /* enable FSK RX */
     tmid_rx_count = 0;
     tmid_rx_capturing = false;
-    tmid_rx_inverted = false;
     tmid_rx_armed = true;
 }
 
@@ -550,13 +548,6 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
     if (!tmid_rx_armed)
         return;
     if (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) {
-        /*
-         * BK4819 reports whether the matched sync was SyncP or SyncN.
-         * Match the existing MDC/FleetSync receive convention and undo
-         * the hardware's negative-sync polarity before feeding Viterbi.
-         */
-        const uint16_t sync_flags = BK4819_ReadRegister(BK4819_REG_0B);
-        tmid_rx_inverted = (sync_flags & (1u << 7)) != 0;
         tmid_rx_count = 0;
         tmid_rx_capturing = true;
     }
@@ -565,8 +556,6 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
         uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
         while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
             uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
-            if (tmid_rx_inverted)
-                word ^= 0xFFFFu;
             tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
             if (tmid_rx_count < TMID_CODED_BYTES)
                 tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
@@ -579,8 +568,6 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
             uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
             while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
                 uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
-                if (tmid_rx_inverted)
-                    word ^= 0xFFFFu;
                 tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
                 if (tmid_rx_count < TMID_CODED_BYTES)
                     tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
