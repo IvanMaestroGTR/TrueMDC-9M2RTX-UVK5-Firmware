@@ -1070,6 +1070,9 @@ static void CheckKeys(void) {
 
 void APP_TimeSlice10ms(void) {
     gNextTimeslice = false;
+#ifdef ENABLE_MDC1200
+    TMID_RxTimeSlice10ms();
+#endif
     BACKLIGHT_TimeSlice10ms();
     UI_MAIN_TimeSlice10ms();
     gFlashLightBlinkCounter++;
