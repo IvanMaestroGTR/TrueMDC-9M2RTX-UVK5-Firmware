@@ -92,7 +92,6 @@ const t_menu_item MenuList[] =
 
 
                 {/*"STE",*/    VOICE_ID_INVALID, MENU_STE, STR_STE},
-                {/*"C.End",*/  VOICE_ID_INVALID, MENU_END_CALL_TONE, "C.End"},
                 {/*"1 Call",*/ VOICE_ID_INVALID, MENU_1_CALL, STR_V_1_CALL},
 
 #ifdef ENABLE_CUSTOM_SIDEFUNCTIONS
@@ -752,7 +751,6 @@ break;
             strcpy(String, gSubMenu_STE[gSubMenuSelection]);
             break;
 
-        case MENU_END_CALL_TONE:
             strcpy(String, gSubMenu_OFF_ON[gSubMenuSelection]);
             break;
 
@@ -793,7 +791,7 @@ break;
         case MENU_AX25_CALLSIGN: {
             if (gIsInSubMenu) {
                 UI_PrintStringSmall(edit, menu_item_x1, menu_item_x2, 3);
-                if (edit_index < 8 && edit_index != 6)
+                if (edit_index >= 0 && edit_index < 8 && edit_index != 6)
                     UI_PrintStringSmall("^", menu_item_x1 + (((menu_item_x2 - menu_item_x1) - 56) + 1) / 2 + (7 * edit_index), 0, 4);
             } else {
                 sprintf(String, "%s-%X", gEeprom.AX25_CALLSIGN, gEeprom.AX25_SSID);
