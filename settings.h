@@ -115,9 +115,6 @@ enum PTT_ID_Mode_t {
     PTT_ID_MODE_FLEETSYNC_PRE,
     PTT_ID_MODE_FLEETSYNC_POST,
     PTT_ID_MODE_FLEETSYNC_BOTH,
-    PTT_ID_MODE_DTMF_PRE,
-    PTT_ID_MODE_DTMF_POST,
-    PTT_ID_MODE_DTMF_BOTH,
     PTT_ID_MODE_AX25_PRE,
     PTT_ID_MODE_AX25_POST,
     PTT_ID_MODE_AX25_BOTH
@@ -295,6 +292,7 @@ typedef struct {
     uint8_t               S0_LEVEL;
 	uint8_t               S9_LEVEL;
 #endif
+    char                  AX25_CALLSIGN[7];
     uint16_t MDC1200_ID;
 #ifdef ENABLE_MDC1200
     uint8_t                  MDC1200_PREAMBLE_DURATION;  // 1-10 cycles

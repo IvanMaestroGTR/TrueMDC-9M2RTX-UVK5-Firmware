@@ -441,6 +441,16 @@ void MENU_AcceptSetting(void) {
             gVfoConfigureMode = VFO_CONFIGURE_RELOAD;
             gFlagResetVfos = true;
             return;
+        case MENU_AX25_CALLSIGN:
+            for (unsigned int i = 0; i < 6; ++i) {
+                char c = edit[i];
+                if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')))
+                    c = ' ';
+                gEeprom.AX25_CALLSIGN[i] = c;
+            }
+            gEeprom.AX25_CALLSIGN[6] = '\0';
+            gRequestSaveSettings = true;
+            return;
 #ifdef ENABLE_MDC1200
             case MENU_MDC_ID:
 #ifdef ENABLE_MDC1200_EDIT
@@ -570,11 +580,6 @@ void MENU_AcceptSetting(void) {
             break;
 
         case MENU_RP_STE:
-            if (gEeprom.PTT_ID == PTT_ID_MODE_DTMF_PRE ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_POST ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_BOTH) {
-                gEeprom.DTMF_PRELOAD_TIME = gSubMenuSelection * 10;
-            }
 #ifdef ENABLE_FLEETSYNC
             else if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
                      gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
@@ -991,11 +996,6 @@ void MENU_ShowCurrentSetting(void) {
             break;
 
         case MENU_RP_STE:
-            if (gEeprom.PTT_ID == PTT_ID_MODE_DTMF_PRE ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_POST ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_BOTH) {
-                gSubMenuSelection = gEeprom.DTMF_PRELOAD_TIME / 10;
-            }
 #ifdef ENABLE_FLEETSYNC
             else if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
                      gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
@@ -1215,9 +1215,10 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
     uint8_t now_menu = UI_MENU_GetCurrentMenuId();
 #ifdef ENABLE_MDC1200_EDIT //���뷨����
     uint8_t end_index = now_menu == MENU_MEM_NAME ? MAX_EDIT_INDEX :
+                        now_menu == MENU_AX25_CALLSIGN ? 6 :
                         now_menu == MENU_FLEETSYNC_UNIT ? 8 : 4;
 #else
-    uint8_t end_index = MAX_EDIT_INDEX;
+    uint8_t end_index = (now_menu == MENU_AX25_CALLSIGN) ? 6 : MAX_EDIT_INDEX;
 #endif
     if ((now_menu == MENU_MEM_NAME //���뷨
 #ifdef ENABLE_MDC1200
@@ -1228,6 +1229,7 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
 #ifdef ENABLE_FLEETSYNC
         || now_menu == MENU_FLEETSYNC_UNIT
 #endif
+        || now_menu == MENU_AX25_CALLSIGN
         ) &&
         edit_index >= 0) {    // currently editing the channel name
 
@@ -1401,8 +1403,10 @@ static void MENU_Key_EXIT(bool bKeyPressed, bool bKeyHeld) {
         return;
     }
 #endif
-    if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME && gIsInSubMenu == true && edit_index >= 0&&gAskForConfirmation == 0) {
-            edit_index = -1;
+    if ((UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME ||
+         UI_MENU_GetCurrentMenuId() == MENU_AX25_CALLSIGN) &&
+        gIsInSubMenu == true && edit_index >= 0 && gAskForConfirmation == 0) {
+        edit_index = -1;
         return;
     }
     gBeepToPlay = BEEP_1KHZ_60MS_OPTIONAL;
@@ -1538,6 +1542,19 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
         gAskForConfirmation = 0;
     }
 #endif
+    if (UI_MENU_GetCurrentMenuId() == MENU_AX25_CALLSIGN) {
+        if (edit_index < 0) {
+            memcpy(edit, gEeprom.AX25_CALLSIGN, 6);
+            edit[6] = '\0';
+            edit_index = 0;
+            memcpy(edit_original, edit, sizeof(edit_original));
+            return;
+        } else if (edit_index < 6) {
+            if (++edit_index < 6)
+                return;
+            gAskForConfirmation = 0;
+        }
+    }
     if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME) { //���뷨MENU
         if (edit_index < 0) {    // enter channel name edit mode
             if (!RADIO_CheckValidChannel(gSubMenuSelection, false, 0))
@@ -1573,7 +1590,8 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
         if (UI_MENU_GetCurrentMenuId() == MENU_RESET ||
             UI_MENU_GetCurrentMenuId() == MENU_MEM_CH ||
             UI_MENU_GetCurrentMenuId() == MENU_DEL_CH ||
-            UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME
+            UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME ||
+            UI_MENU_GetCurrentMenuId() == MENU_AX25_CALLSIGN
 #ifdef ENABLE_MDC1200
 #ifdef ENABLE_MDC1200_EDIT
 
@@ -1668,6 +1686,17 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction) 
     uint8_t Channel;
     bool bCheckScanList;
     if (gIsInSubMenu && edit_index >= 0) { //���뷨UP DOWN
+        if (UI_MENU_GetCurrentMenuId() == MENU_AX25_CALLSIGN) {
+            if (bKeyPressed && edit_index < 6) {
+                const char alphabet[] = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                int pos = 0;
+                while (pos < (int)sizeof(alphabet) - 1 && alphabet[pos] != edit[edit_index]) ++pos;
+                pos = (pos + Direction + (int)sizeof(alphabet) - 1) % ((int)sizeof(alphabet) - 1);
+                edit[edit_index] = alphabet[pos];
+                gRequestDisplayScreen = DISPLAY_MENU;
+            }
+            return;
+        }
         if (UI_MENU_GetCurrentMenuId() == MENU_MEM_NAME) {    // change the character
 
             if (bKeyPressed && edit_index < MAX_EDIT_INDEX) {

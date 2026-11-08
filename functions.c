@@ -208,20 +208,9 @@ void FUNCTION_Transmit() {
         SYSTEM_DelayMs(20);
     }
 
-    const bool hasPreDtmfPTTID = (gEeprom.PTT_ID == PTT_ID_MODE_DTMF_PRE ||
-                                  gEeprom.PTT_ID == PTT_ID_MODE_DTMF_BOTH);
-    const bool sendDtmfPTTID = hasPreDtmfPTTID &&
-                               gDTMF_ReplyState == DTMF_REPLY_NONE;
-
-    if (sendDtmfPTTID) {
-        // Automatic DTMF PTT ID follows the normal D ST setting.
-        if (DTMF_Reply(false))
-            // Leave a small gap between the DTMF ID and the talk-permit tone.
-            SYSTEM_DelayMs(10);
-    } else {
-        // Manual/other DTMF transmission keeps the normal D ST setting.
-        DTMF_Reply(false);
-    }
+    // Process manually queued DTMF keying only. Automatic DTMF PTT-ID modes
+    // are intentionally removed; AX.25 must never fall through to TX-UP DTMF.
+    DTMF_Reply(false);
 #ifdef ENABLE_MDC1200
     const bool useFleetSyncPTTID = (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
                                    gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||

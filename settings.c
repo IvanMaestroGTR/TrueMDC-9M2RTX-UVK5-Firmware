@@ -44,6 +44,9 @@ EEPROM_Config_t gEeprom={0};
 void SETTINGS_InitEEPROM(void)
 {
     uint8_t Data[16] = {0};
+    uint8_t ax25_settings[8];
+    EEPROM_ReadBuffer(0x0F28, ax25_settings, sizeof(ax25_settings));
+    const bool compact_ptt_id_format = ax25_settings[7] == 0xA5u;
     // 0E70..0E77
     EEPROM_ReadBuffer(0x0E70, Data, 8);
     gEeprom.CHAN_1_CALL          = IS_MR_CHANNEL(Data[0]) ? Data[0] : MR_CHANNEL_FIRST;
@@ -180,10 +183,20 @@ void SETTINGS_InitEEPROM(void)
 #ifdef ENABLE_ALARM
     gEeprom.ALARM_MODE                 = (Data[0] <  2) ? Data[0] : true;
 #endif
-    /* Supported PTT ID values include the AX.25 APRS modes. */
-    gEeprom.PTT_ID                          = (Data[1] >= PTT_ID_MODE_OFF &&
-                                               Data[1] <= PTT_ID_MODE_AX25_BOTH) ?
-                                              Data[1] : PTT_ID_MODE_OFF;
+    /* Compact PTT-ID enum is marked in 0F2F. Migrate legacy AX.25 values
+     * once; legacy automatic DTMF values 7..9 are reset to OFF. */
+    {
+        uint8_t stored_ptt_id = Data[1];
+        if (!compact_ptt_id_format) {
+            if (stored_ptt_id >= 10u && stored_ptt_id <= 12u)
+                stored_ptt_id = (uint8_t)(PTT_ID_MODE_AX25_PRE + stored_ptt_id - 10u);
+            else if (stored_ptt_id >= 7u && stored_ptt_id <= 9u)
+                stored_ptt_id = PTT_ID_MODE_OFF;
+        }
+        if (stored_ptt_id > PTT_ID_MODE_AX25_BOTH)
+            stored_ptt_id = PTT_ID_MODE_OFF;
+        gEeprom.PTT_ID = (PTT_ID_Mode_t)stored_ptt_id;
+    }
     gEeprom.REPEATER_TAIL_TONE_ELIMINATION = (Data[2] >= 2 && Data[2] <= 10) ? Data[2] : 2;
     gEeprom.TX_VFO                         = (Data[3] <  2) ? Data[3] : 0;
     gEeprom.BATTERY_TYPE                   = (Data[4] < BATTERY_TYPE_UNKNOWN) ? Data[4] : BATTERY_TYPE_1600_MAH;
@@ -194,6 +207,28 @@ void SETTINGS_InitEEPROM(void)
     gEeprom.FLEETSYNC_FLEET                = (Data[7] != 0xffu) ? (uint16_t)Data[7] + FLEETSYNC_FLEET_MIN : FLEETSYNC_FLEET_MIN;
 #endif
 #endif
+
+    // 0F28..0F2F - AX.25 source callsign (six-character AX.25 address)
+    memcpy(Data, ax25_settings, 8);
+    memcpy(gEeprom.AX25_CALLSIGN, Data, 6);
+    gEeprom.AX25_CALLSIGN[6] = '\0';
+    {
+        bool valid_callsign = true;
+        bool padding_started = false;
+        for (unsigned int i = 0; i < 6; ++i) {
+            const char c = gEeprom.AX25_CALLSIGN[i];
+            if (c == ' ') {
+                padding_started = true;
+            } else if (padding_started ||
+                       !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+                valid_callsign = false;
+                break;
+            }
+        }
+        if (!valid_callsign || Data[0] == 0xFFu || gEeprom.AX25_CALLSIGN[0] == ' ') {
+            memcpy(gEeprom.AX25_CALLSIGN, "9M2RTX", 7);
+        }
+    }
 
     // 0F20..0F27 - FLEETSYNC Unit (custom reserved block)
 #ifdef ENABLE_FLEETSYNC
@@ -632,6 +667,11 @@ void SETTINGS_SaveSettings(void)
     State[6] = 0xFF;
 #endif
     EEPROM_WriteBuffer(0x0EA8, State,8);
+    // 0F28..0F2F - AX.25 source callsign
+    memset(State, 0xFF, sizeof(State));
+    memcpy(State, gEeprom.AX25_CALLSIGN, 6);
+    State[7] = 0xA5u; // marks the compact PTT-ID enum layout
+    EEPROM_WriteBuffer(0x0F28, State, 8);
 #ifdef ENABLE_FLEETSYNC
     // 0F20..0F27 - FLEETSYNC Unit (custom reserved block)
     memset(State, 0xFF, sizeof(State));

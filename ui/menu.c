@@ -78,6 +78,7 @@ const t_menu_item MenuList[] =
                 {/*"ChDisp",*/ VOICE_ID_INVALID, MENU_MDF, STR_CHDISP}, // was "MDF"
                 {/*"BackLt",*/ VOICE_ID_INVALID, MENU_ABR, STR_BACKLT}, // was "ABR"
                 {/*"BLMax",*/  VOICE_ID_INVALID, MENU_ABR_MAX, STR_LIGHT},
+                {/*"AXCall",*/ VOICE_ID_INVALID, MENU_AX25_CALLSIGN, "AXCall"},
 #ifdef ENABLE_MDC1200
                 {/*"MDCID",*/  VOICE_ID_INVALID, MENU_MDC_ID, MDC_ID},
  #ifdef ENABLE_FLEETSYNC
@@ -312,9 +313,6 @@ const char *const gSubMenu_PTT_ID[] =
     "Pre FSync",
     "Post FSync",
     "Both FSync",
-    "Pre DTMF",
-    "Post DTMF",
-    "Both DTMF",
     "Pre AX.25",
     "Post AX.25",
     "Both AX.25"
@@ -543,11 +541,7 @@ void UI_DisplayMenu(void) {
     const char *menu_name = MenuList[gMenuCursor].name;
 #ifdef ENABLE_FLEETSYNC
     if (MenuList[gMenuCursor].menu_id == MENU_RP_STE) {
-        if (gEeprom.PTT_ID == PTT_ID_MODE_DTMF_PRE ||
-            gEeprom.PTT_ID == PTT_ID_MODE_DTMF_POST ||
-            gEeprom.PTT_ID == PTT_ID_MODE_DTMF_BOTH)
-            menu_name = "DTM Dly";
-        else if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
+        if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
                  gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
                  gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_BOTH)
             menu_name = "FSc Dly";
@@ -797,6 +791,21 @@ break;
             break;
         }
 #ifdef ENABLE_MDC1200
+        case MENU_AX25_CALLSIGN: {
+            if (gIsInSubMenu) {
+                UI_PrintStringSmall(edit, menu_item_x1, menu_item_x2, 3);
+                if (edit_index < 6)
+                    UI_PrintStringSmall("^", menu_item_x1 + (((menu_item_x2 - menu_item_x1) - 42) + 1) / 2 + (7 * edit_index), 0, 4);
+            } else {
+                UI_PrintStringSmall(gEeprom.AX25_CALLSIGN, menu_item_x1, menu_item_x2, 3);
+                edit_index = -1;
+                memcpy(edit, gEeprom.AX25_CALLSIGN, 7);
+                edit[6] = '\0';
+            }
+            already_printed = true;
+            break;
+        }
+#ifdef ENABLE_MDC1200
         case MENU_MDC_ID: {
 #ifdef ENABLE_MDC1200_EDIT
             if (gIsInSubMenu) {
@@ -960,13 +969,7 @@ break;
             break;
 
         case MENU_RP_STE:
-            if (gEeprom.PTT_ID == PTT_ID_MODE_DTMF_PRE ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_POST ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_BOTH) {
-                sprintf(String, "%d0ms", gSubMenuSelection);
-            } else {
-                sprintf(String, "%d00ms", gSubMenuSelection);
-            }
+            sprintf(String, "%d00ms", gSubMenuSelection);
             break;
 
         case MENU_S_LIST:

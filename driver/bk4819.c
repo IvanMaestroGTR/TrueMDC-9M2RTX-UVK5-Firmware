@@ -393,17 +393,17 @@ void BK4819_SendAX25PTTID(void)
 
     {
         static const char dest[] = "APRS  ";
-        static const char source[] = "9M2RTX";
         for (unsigned int i = 0; i < 6; ++i) frame[n++] = (uint8_t)dest[i] << 1;
         frame[n++] = 0x60u;
-        for (unsigned int i = 0; i < 6; ++i) frame[n++] = (uint8_t)source[i] << 1;
+        for (unsigned int i = 0; i < 6; ++i)
+            frame[n++] = (uint8_t)gEeprom.AX25_CALLSIGN[i] << 1;
         frame[n++] = 0x61u;
     }
     frame[n++] = 0x03u;
     frame[n++] = 0xF0u;
     frame[n++] = '>';
-    frame[n++] = '9'; frame[n++] = 'M'; frame[n++] = '2';
-    frame[n++] = 'R'; frame[n++] = 'T'; frame[n++] = 'X';
+    for (unsigned int i = 0; i < 6 && gEeprom.AX25_CALLSIGN[i] != ' '; ++i)
+        frame[n++] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
 
     for (unsigned int i = 0; i < n; ++i) {
         crc ^= frame[i];
@@ -449,7 +449,34 @@ void BK4819_SendAX25PTTID(void)
             AX25_SEND_RAW_BIT((flag_ >> fb_) & 1u); \
     } while (0)
 
+#ifdef ENABLE_MDC1200
+#define AX25_SEND_MDC_SYMBOL(v) do { \
+        const uint8_t symbol_ = (uint8_t)(v); \
+        if (symbol_ != tone_mark) { \
+            BK4819_WriteRegister(BK4819_REG_71, symbol_ ? mark : scale_freq(1800u)); \
+            tone_mark = symbol_; \
+        } \
+        AX25_WAIT_SYMBOL(); \
+    } while (0)
+#define AX25_SEND_MDC_PREAMBLE() do { \
+        if (gEeprom.MDC1200_PREAMBLE_DURATION <= 1u) { \
+            for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
+            for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
+        } else { \
+            for (unsigned int c_ = 0; c_ < gEeprom.MDC1200_PREAMBLE_DURATION; ++c_) { \
+                for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
+                for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
+            } \
+        } \
+    } while (0)
+    if (gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_POST)
+        AX25_SEND_MDC_PREAMBLE();
+    /* AX.25 HDLC flags are still mandatory; the MDC-style tone lead-in
+     * replaces the long 20-flag audible bit-sync run, not frame sync. */
+    for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
+#else
     for (unsigned int f = 0; f < 20u; ++f) AX25_SEND_FLAG();
+#endif
     for (unsigned int i = 0; i < n; ++i) {
         for (unsigned int b = 0; b < 8u; ++b) {
             const uint8_t bit = (frame[i] >> b) & 1u;
@@ -460,6 +487,12 @@ void BK4819_SendAX25PTTID(void)
         }
     }
     for (unsigned int f = 0; f < 3u; ++f) AX25_SEND_FLAG();
+#ifdef ENABLE_MDC1200
+    if (gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_PRE)
+        AX25_SEND_MDC_PREAMBLE();
+#undef AX25_SEND_MDC_PREAMBLE
+#undef AX25_SEND_MDC_SYMBOL
+#endif
 
 #undef AX25_SEND_FLAG
 #undef AX25_SEND_RAW_BIT

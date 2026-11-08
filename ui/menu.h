@@ -85,6 +85,7 @@ enum {
     MENU_ANI_ID,
 #endif
 
+    MENU_AX25_CALLSIGN,
     MENU_MDC_ID,
 
 #ifdef ENABLE_MDC1200
@@ -171,7 +172,7 @@ extern const char    gSubMenu_AL_MOD[2][5];
 extern const char        gSubMenu_D_RSP[4][11];//11
 #endif
 
-extern const char *const gSubMenu_PTT_ID[13];
+extern const char *const gSubMenu_PTT_ID[10];
 
 
 
