@@ -293,6 +293,7 @@ typedef struct {
 	uint8_t               S9_LEVEL;
 #endif
     char                  AX25_CALLSIGN[7];
+    uint8_t               AX25_SSID;
     uint16_t MDC1200_ID;
 #ifdef ENABLE_MDC1200
     uint8_t                  MDC1200_PREAMBLE_DURATION;  // 1-10 cycles
