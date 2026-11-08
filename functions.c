@@ -203,7 +203,11 @@ void FUNCTION_Transmit() {
         gEeprom.PTT_ID == PTT_ID_MODE_AX25_BOTH) {
         BK4819_MuteMic();
         SYSTEM_DelayMs(gEeprom.REPEATER_TAIL_TONE_ELIMINATION * 100);
-        BK4819_SendAX25PTTID();
+#ifdef ENABLE_MDC1200
+        BK4819_SendAX25PTTID(gEeprom.MDC1200_PREAMBLE_WHEN != MDC_PREAMBLE_WHEN_POST);
+#else
+        BK4819_SendAX25PTTID(false);
+#endif
         BK4819_UnmuteMic();
         SYSTEM_DelayMs(20);
     }
