@@ -47,10 +47,10 @@ static const uint8_t DTMF_TONE1_GAIN = 65;
 static const uint8_t DTMF_TONE2_GAIN = 93;
 static const uint8_t MDC_FSK_TX_GAIN = 96;  // FSK gain for MDC1200 TX (configurable: 0-127, default 96)
 
-// SysTick ticks per 1200-baud symbol. Nominal is 40000 @ 48 MHz.
-// Measured +0.5% slow on one radio, so start at 40000 * 1200/1194 ~= 39800.
-// Retune: new = old * 1200 / measured_baud
-#define MDC_TX_BIT_TICKS   39870u
+// Shared SysTick ticks per FSK symbol for MDC1200, FleetSync and TMID.
+// At 48 MHz, 39870 ticks gives approximately 1203.91 baud.
+// Keep one timing reference so all three signalling modes stay aligned.
+#define FSK_TX_BIT_TICKS   39870u
 
 #ifdef ENABLE_MDC1200
 static bool BK4819_IsFleetSyncPTTIDMode(void)
@@ -416,7 +416,7 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
     uint8_t tone_mark = 2u;
     const uint16_t mark = scale_freq(1200u);
     const uint16_t space = scale_freq(2200u);
-    const uint32_t bit_ticks_q8 = 39870u << 8;
+    const uint32_t bit_ticks_q8 = FSK_TX_BIT_TICKS << 8;
     const uint32_t reload = SysTick->LOAD + 1u;
     uint32_t acc_q8 = 0u, last;
     const uint32_t primask = __get_PRIMASK();
@@ -2571,7 +2571,7 @@ void BK4819_send_MDC1200(const uint8_t op, const uint8_t arg, const uint16_t id,
      * register-write overhead inside the symbol interval.
      */
     {
-        const uint32_t bit_ticks_q8 = MDC_TX_BIT_TICKS << 8;
+        const uint32_t bit_ticks_q8 = FSK_TX_BIT_TICKS << 8;
         const uint32_t reload       = SysTick->LOAD + 1u;
         const uint16_t reg71_1200   = scale_freq(1200u);
         const uint16_t reg71_1800   = scale_freq(1800u);
