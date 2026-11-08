@@ -474,6 +474,7 @@ static void tmid_rx_arm(void)
     BK4819_RX_TurnOn();
 
     BK4819_WriteRegister(BK4819_REG_70, 0x80E0u);
+    BK4819_WriteRegister(BK4819_REG_71, 22714u); /* 2200 Hz tone reference */
     BK4819_WriteRegister(BK4819_REG_72, 0x3065u);
     BK4819_WriteRegister(BK4819_REG_58, 0x3FC3u);
     BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
@@ -558,10 +559,14 @@ static void tmid_rx_finish(void)
     tmid_rx_capturing = false;
 }
 
-static void tmid_rx_read_fifo(void)
+static void tmid_rx_read_fifo(uint8_t words)
 {
-    uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
-    while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
+    /*
+     * REG_5E low bits are the programmed almost-full threshold, not a
+     * live FIFO occupancy count. The proven BK4819 APRS path drains four
+     * words on FIFO_ALMOST_FULL and up to eight on RX_FINISHED.
+     */
+    while (words-- && tmid_rx_count < TMID_CODED_BYTES) {
         const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
         tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
         if (tmid_rx_count < TMID_CODED_BYTES)
@@ -579,16 +584,13 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
     }
     if ((interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) &&
         tmid_rx_capturing) {
-        tmid_rx_read_fifo();
-        if (tmid_rx_count >= TMID_CODED_BYTES)
-            tmid_rx_finish();
+        tmid_rx_read_fifo(4u);
     }
     if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
-        if (tmid_rx_capturing && tmid_rx_count < TMID_CODED_BYTES) {
-            tmid_rx_read_fifo();
-        }
-        if (tmid_rx_capturing)
+        if (tmid_rx_capturing) {
+            tmid_rx_read_fifo(8u);
             tmid_rx_finish();
+        }
         /* Keep the RX/squelch DSP running; restart only the FSK capture. */
         tmid_rx_restart_capture();
     }
