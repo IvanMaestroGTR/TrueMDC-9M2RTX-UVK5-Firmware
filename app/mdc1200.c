@@ -1,4 +1,5 @@
 #include "driver/bk4819.h"
+#include "app/app.h"
 #include "driver/crc.h"
 #include "driver/uart.h"
 #include "mdc1200.h"
@@ -305,6 +306,247 @@ bool MDC1200_process_rx_data(
     return false;
 }
 
+
+/* -------------------------------------------------------------------------
+ * TMID codec and receive path.
+ * 10 information bytes: version, six callsign chars, decimal SSID, CRC-16.
+ * Rate-1/2 systematic convolutional FEC, K=7, parity polynomial 0x65.
+ * The systematic and parity streams are packed MSB-first. CRC is checked
+ * after Viterbi decoding, so corrected bits are validated before display.
+ * ------------------------------------------------------------------------- */
+char tmid_rx_callsign[7];
+uint8_t tmid_rx_ssid;
+
+#define TMID_INFO_BITS (TMID_DATA_BYTES * 8u)
+#define TMID_POLY 0x65u
+#define TMID_METRIC_INF 0x3FFFu
+
+static uint8_t tmid_parity(uint8_t v)
+{
+    v &= TMID_POLY;
+    v ^= v >> 4;
+    v ^= v >> 2;
+    v ^= v >> 1;
+    return v & 1u;
+}
+
+static uint16_t tmid_crc16(const uint8_t *p, unsigned int n)
+{
+    uint16_t crc = 0xFFFFu;
+    while (n--) {
+        crc ^= *p++;
+        for (unsigned int b = 0; b < 8u; ++b)
+            crc = (crc & 1u) ? (uint16_t)((crc >> 1) ^ 0xA001u)
+                             : (uint16_t)(crc >> 1);
+    }
+    return crc;
+}
+
+void TMID_EncodePayload(const uint8_t input[TMID_DATA_BYTES],
+                        uint8_t output[TMID_CODED_BYTES])
+{
+    uint8_t state = 0;
+    memset(output, 0, TMID_CODED_BYTES);
+    for (unsigned int t = 0; t < TMID_INFO_BITS; ++t) {
+        const uint8_t bit = (input[t >> 3] >> (7u - (t & 7u))) & 1u;
+        const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
+        const uint8_t parity = tmid_parity(reg);
+        if (bit)
+            output[t >> 3] |= (uint8_t)(1u << (7u - (t & 7u)));
+        if (parity)
+            output[(TMID_INFO_BITS + t) >> 3] |=
+                (uint8_t)(1u << (7u - ((TMID_INFO_BITS + t) & 7u)));
+        state = reg & 0x3Fu;
+    }
+}
+
+bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
+                        uint8_t output[TMID_DATA_BYTES])
+{
+    uint16_t metric[64], next_metric[64];
+    uint8_t decisions[TMID_INFO_BITS][8];
+    for (unsigned int s = 0; s < 64u; ++s)
+        metric[s] = (s == 0u) ? 0u : TMID_METRIC_INF;
+    memset(decisions, 0, sizeof(decisions));
+
+    for (unsigned int t = 0; t < TMID_INFO_BITS; ++t) {
+        const uint8_t sys = (input[t >> 3] >> (7u - (t & 7u))) & 1u;
+        const unsigned int pt = TMID_INFO_BITS + t;
+        const uint8_t par = (input[pt >> 3] >> (7u - (pt & 7u))) & 1u;
+        for (unsigned int ns = 0; ns < 64u; ++ns) {
+            const uint8_t bit = ns & 1u;
+            const unsigned int p0 = ns >> 1;
+            const unsigned int p1 = p0 | 0x20u;
+            const uint8_t reg0 = (uint8_t)((p0 << 1) | bit);
+            const uint8_t reg1 = (uint8_t)((p1 << 1) | bit);
+            const uint16_t cost0 = (uint16_t)((bit != sys) + (tmid_parity(reg0) != par));
+            const uint16_t cost1 = (uint16_t)((bit != sys) + (tmid_parity(reg1) != par));
+            const uint16_t m0 = (uint16_t)(metric[p0] + cost0);
+            const uint16_t m1 = (uint16_t)(metric[p1] + cost1);
+            if (m1 < m0) {
+                next_metric[ns] = m1;
+                decisions[t][ns >> 3] |= (uint8_t)(1u << (ns & 7u));
+            } else {
+                next_metric[ns] = m0;
+            }
+        }
+        memcpy(metric, next_metric, sizeof(metric));
+    }
+
+    unsigned int state = 0;
+    for (unsigned int s = 1; s < 64u; ++s)
+        if (metric[s] < metric[state])
+            state = s;
+
+    memset(output, 0, TMID_DATA_BYTES);
+    for (int t = (int)TMID_INFO_BITS - 1; t >= 0; --t) {
+        const uint8_t bit = state & 1u;
+        if (bit)
+            output[(unsigned int)t >> 3] |=
+                (uint8_t)(1u << (7u - ((unsigned int)t & 7u)));
+        {
+            const bool from_one = (decisions[t][state >> 3] &
+                                   (uint8_t)(1u << (state & 7u))) != 0;
+            state = (state >> 1) | (from_one ? 0x20u : 0u);
+        }
+    }
+
+    if (output[0] != 0x01u ||
+        tmid_crc16(output, 8u) !=
+            (uint16_t)(output[8] | ((uint16_t)output[9] << 8)) ||
+        output[7] < '0' || output[7] > '9')
+        return false;
+
+    {
+        bool padding = false;
+        for (unsigned int i = 1; i < 7u; ++i) {
+            const char c = (char)output[i];
+            if (c == ' ') {
+                padding = true;
+                continue;
+            }
+            if (padding || !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')))
+                return false;
+        }
+    }
+    return output[1] != ' ';
+}
+
+static uint8_t tmid_rx_buffer[TMID_CODED_BYTES];
+static uint8_t tmid_rx_count;
+static bool tmid_rx_armed;
+static bool tmid_rx_capturing;
+
+static bool tmid_mode_selected(void)
+{
+    return gEeprom.PTT_ID == PTT_ID_MODE_TMID_PRE ||
+           gEeprom.PTT_ID == PTT_ID_MODE_TMID_POST ||
+           gEeprom.PTT_ID == PTT_ID_MODE_TMID_BOTH;
+}
+
+static void tmid_rx_arm(void)
+{
+    /* Bell-202 hardware FFSK setup based on the TA1JS APRS receiver. */
+    BK4819_WriteRegister(BK4819_REG_70, (1u << 15) | (1u << 7) | 96u);
+    BK4819_WriteRegister(BK4819_REG_71, 22714u); /* 2200 Hz */
+    BK4819_WriteRegister(BK4819_REG_72, 12389u); /* 1200 baud */
+    BK4819_WriteRegister(BK4819_REG_58,
+        (1u << 13) | (7u << 10) | (3u << 8) |
+        (3u << 6) | (1u << 1) | 1u);
+    BK4819_WriteRegister(BK4819_REG_5A, 0xD391u);
+    BK4819_WriteRegister(BK4819_REG_5B, 0xD391u);
+    BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u); /* disable hardware CRC */
+    BK4819_WriteRegister(BK4819_REG_5D,
+                         (uint16_t)((TMID_CODED_BYTES - 1u) << 8));
+    BK4819_WriteRegister(BK4819_REG_5E, (64u << 3) | 4u);
+    {
+        const uint16_t mask = BK4819_ReadRegister(BK4819_REG_3F);
+        BK4819_WriteRegister(BK4819_REG_3F,
+            mask | BK4819_REG_02_FSK_RX_FINISHED |
+                   BK4819_REG_02_FSK_FIFO_ALMOST_FULL |
+                   BK4819_REG_02_FSK_RX_SYNC);
+    }
+    BK4819_WriteRegister(BK4819_REG_59, 0x4000u); /* clear RX FIFO */
+    BK4819_WriteRegister(BK4819_REG_59, 0x1000u); /* enable FSK RX */
+    tmid_rx_count = 0;
+    tmid_rx_capturing = false;
+    tmid_rx_armed = true;
+}
+
+static void tmid_rx_stop(void)
+{
+    if (!tmid_rx_armed)
+        return;
+    BK4819_WriteRegister(BK4819_REG_59, 0u);
+    BK4819_WriteRegister(BK4819_REG_58, 0u);
+    BK4819_WriteRegister(BK4819_REG_70, 0u);
+    tmid_rx_armed = false;
+    tmid_rx_capturing = false;
+    tmid_rx_count = 0;
+}
+
+void TMID_RxService(void)
+{
+    if (!tmid_mode_selected() || gCurrentFunction == FUNCTION_TRANSMIT) {
+        tmid_rx_stop();
+        return;
+    }
+    if (!tmid_rx_armed)
+        tmid_rx_arm();
+}
+
+static void tmid_rx_finish(void)
+{
+    uint8_t decoded[TMID_DATA_BYTES];
+    if (tmid_rx_count == TMID_CODED_BYTES &&
+        TMID_DecodePayload(tmid_rx_buffer, decoded)) {
+        memcpy(tmid_rx_callsign, decoded + 1u, 6u);
+        tmid_rx_callsign[6] = '\0';
+        tmid_rx_ssid = (uint8_t)(decoded[7] - '0');
+        mdc1200_rx_ready_tick_500ms = 10u;
+        gUpdateDisplay = true;
+    }
+    tmid_rx_count = 0;
+    tmid_rx_capturing = false;
+}
+
+void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
+{
+    if (!tmid_rx_armed)
+        return;
+    if (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) {
+        tmid_rx_count = 0;
+        tmid_rx_capturing = true;
+    }
+    if ((interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) &&
+        tmid_rx_capturing) {
+        uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
+        while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
+            const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
+            tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
+            if (tmid_rx_count < TMID_CODED_BYTES)
+                tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
+        }
+        if (tmid_rx_count >= TMID_CODED_BYTES)
+            tmid_rx_finish();
+    }
+    if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
+        if (tmid_rx_capturing && tmid_rx_count < TMID_CODED_BYTES) {
+            uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
+            while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
+                const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
+                tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
+                if (tmid_rx_count < TMID_CODED_BYTES)
+                    tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
+            }
+        }
+        if (tmid_rx_capturing)
+            tmid_rx_finish();
+        tmid_rx_armed = false;
+        tmid_rx_arm();
+    }
+}
+
 #ifdef ENABLE_FLEETSYNC
 #include "app/fleetsync.h"
 static uint8_t fleetsync_rx_buffer[FLEETSYNC_PACKET_SIZE];
@@ -313,6 +555,10 @@ static unsigned int fleetsync_rx_buffer_index;
 
 void solve_sign(const uint16_t interrupt_bits)
 {
+    if (tmid_mode_selected()) {
+        TMID_HandleRxInterrupts(interrupt_bits);
+        return;
+    }
     const bool rx_sync = (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) != 0;
     const bool rx_fifo_almost_full =
         (interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) != 0;
