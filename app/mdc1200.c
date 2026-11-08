@@ -474,7 +474,7 @@ static void tmid_rx_arm(void)
     BK4819_RX_TurnOn();
 
     BK4819_WriteRegister(BK4819_REG_70, 0x80E0u);
-    BK4819_WriteRegister(BK4819_REG_71, 22714u); /* 2200 Hz tone reference */
+    BK4819_WriteRegister(BK4819_REG_71, 18584u); /* 1800 Hz tone reference */
     BK4819_WriteRegister(BK4819_REG_72, 0x3065u);
     BK4819_WriteRegister(BK4819_REG_58, 0x3FC3u);
     BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
