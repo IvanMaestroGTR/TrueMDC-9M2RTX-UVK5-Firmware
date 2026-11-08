@@ -416,7 +416,6 @@ void BK4819_SendAX25PTTID(void)
 
     saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
     BK4819_EnterTxMute();
-    BK4819_SetAF(BK4819_AF_MUTE);
     BK4819_WriteRegister(BK4819_REG_70,
                          BK4819_REG_70_ENABLE_TONE1 |
                          (96u << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));

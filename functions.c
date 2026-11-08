@@ -202,7 +202,7 @@ void FUNCTION_Transmit() {
     if (gEeprom.PTT_ID == PTT_ID_MODE_AX25_PRE ||
         gEeprom.PTT_ID == PTT_ID_MODE_AX25_BOTH) {
         BK4819_MuteMic();
-        SYSTEM_DelayMs(200);
+        SYSTEM_DelayMs(gEeprom.REPEATER_TAIL_TONE_ELIMINATION * 100);
         BK4819_SendAX25PTTID();
         BK4819_UnmuteMic();
         SYSTEM_DelayMs(20);
