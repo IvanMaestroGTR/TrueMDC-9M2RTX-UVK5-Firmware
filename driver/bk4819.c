@@ -388,14 +388,14 @@ static void BK4819_TMIDEncodePayload(const uint8_t input[TMID_DATA_BYTES],
     uint8_t state = 0;
     memset(output, 0, TMID_CODED_BYTES);
     for (unsigned int t = 0; t < TMID_DATA_BYTES * 8u; ++t) {
-        const uint8_t bit = (input[t >> 3] >> (7u - (t & 7u))) & 1u;
+        const uint8_t bit = (input[t >> 3] >> (t & 7u)) & 1u;
         const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
         const uint8_t parity = BK4819_TMIDParity(reg);
         if (bit)
-            output[t >> 3] |= (uint8_t)(1u << (7u - (t & 7u)));
+            output[t >> 3] |= (uint8_t)(1u << (t & 7u));
         if (parity)
             output[(TMID_DATA_BYTES * 8u + t) >> 3] |=
-                (uint8_t)(1u << (7u - ((TMID_DATA_BYTES * 8u + t) & 7u)));
+                (uint8_t)(1u << ((TMID_DATA_BYTES * 8u + t) & 7u));
         state = reg & 0x3Fu;
     }
 }
@@ -403,8 +403,8 @@ static void BK4819_TMIDEncodePayload(const uint8_t input[TMID_DATA_BYTES],
 /*
  * TrueMDC one-way callsign beacon.
  * 1200-baud AFSK: 1200 Hz = 1, 2200 Hz = 0.
- * Packet: D3 91 D3 91 sync, six ASCII callsign bytes, one ASCII SSID digit,
- * then CRC-16/MODBUS (little-endian). No AX.25, HDLC flags, NRZI or bit stuffing.
+ * Packet: D3 91 D3 91 sync, version, six ASCII callsign bytes, one ASCII SSID digit,
+ * CRC-16/MODBUS and rate-1/2 convolutional FEC. No HDLC or bit stuffing.
  * The existing 2200/1200-Hz warble preamble is intentionally preserved.
  */
 void BK4819_SendTMIDBeacon(const bool with_preamble)
