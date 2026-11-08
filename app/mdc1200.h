@@ -114,6 +114,16 @@ void solve_sign(const uint16_t interrupt_bits);
 
 void MDC1200_init(void);
 
+/* TMID compact one-way callsign identity codec and receive path. */
+#define TMID_DATA_BYTES 10u
+#define TMID_CODED_BYTES (TMID_DATA_BYTES * 2u)
+void TMID_EncodePayload(const uint8_t input[TMID_DATA_BYTES], uint8_t output[TMID_CODED_BYTES]);
+bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES], uint8_t output[TMID_DATA_BYTES]);
+void TMID_RxService(void);
+void TMID_HandleRxInterrupts(uint16_t interrupt_bits);
+extern char tmid_rx_callsign[7];
+extern uint8_t tmid_rx_ssid;
+
 
 uint16_t extractHex(const char *str);
 
