@@ -462,7 +462,7 @@ void BK4819_SendAX25PTTID(const bool with_preamble)
     } while (0)
 #define AX25_SEND_MDC_PREAMBLE() do { \
         tone_mark = 2u; /* force the first 2200-Hz write after any AX.25 tone */ \
-        if (with_preamble) { \
+        if (with_preamble && gEeprom.MDC1200_PREAMBLE_DURATION > 1u) { \
             for (unsigned int c_ = 0; c_ < gEeprom.MDC1200_PREAMBLE_DURATION; ++c_) { \
                 for (unsigned int p_ = 0; p_ < 33u; ++p_) AX25_SEND_MDC_SYMBOL(0u); \
                 for (unsigned int p_ = 0; p_ < 20u; ++p_) AX25_SEND_MDC_SYMBOL(1u); \
@@ -1273,32 +1273,6 @@ void BK4819_PlayToneSequence(const uint16_t *frequencies, const uint16_t *durati
 //    BK4819_TurnsOffTones_TurnsOnRX();
 //}
 
-void BK4819_PlayRxEndTone(void) {
-    BK4819_EnterTxMute();
-    AUDIO_AudioPathOn();
-    BK4819_SetAF(BK4819_AF_BEEP);
-    BK4819_WriteRegister(BK4819_REG_70,
-                         BK4819_REG_70_ENABLE_TONE1 |
-                         (66u << BK4819_REG_70_SHIFT_TONE1_TUNING_GAIN));
-    BK4819_Enable_AfDac_DiscMode_TxDsp();
-    SYSTEM_DelayMs(50);
-
-    static const uint16_t frequencies[] = {1480, 1480, 1397};
-    static const uint16_t durations[] = {100, 50, 50};
-    for (unsigned int i = 0; i < ARRAY_SIZE(frequencies); i++) {
-        BK4819_WriteRegister(BK4819_REG_71, scale_freq(frequencies[i]));
-        BK4819_ExitTxMute();
-        SYSTEM_DelayMs(durations[i]);
-        BK4819_EnterTxMute();
-        if (i + 1 < ARRAY_SIZE(frequencies))
-            SYSTEM_DelayMs(30);
-    }
-
-    AUDIO_AudioPathOff();
-    BK4819_SetAF(BK4819_AF_MUTE);
-    BK4819_WriteRegister(BK4819_REG_70, 0x0000);
-    BK4819_TurnsOffTones_TurnsOnRX();
-}
 
 void BK4819_ResetTalkPermitToneState(void) {
     gKenwSecondaryTone = false;
