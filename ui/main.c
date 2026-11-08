@@ -800,22 +800,8 @@ void UI_DisplayMain(void) {
 
 #ifdef ENABLE_FMRADIO
             if (isFmVFO) {
-                const uint16_t status = BK1080_ReadRegister(BK1080_REG_10);
-                const uint8_t rssi = BK1080_REG_10_GET_RSSI(status);
-                static const uint8_t fm_small_rssi_thresholds[] = {
-                    20, // 2 bars
-                    35, // 3 bars
-                    50, // 4 bars
-                    65, // 5 bars
-                    80  // 6 bars / very strong signal
-                };
-
-                // Keep one bar as the noise-floor / no-signal indication.
-                Level = 1;
-                for (unsigned int i = 0; i < ARRAY_SIZE(fm_small_rssi_thresholds); i++) {
-                    if (rssi >= fm_small_rssi_thresholds[i])
-                        Level = i + 2;
-                }
+                // FM signal-strength bars intentionally disabled.
+                // Keep the FM radio and its receiver/RSSI functionality intact.
             } else
 #endif
             if (mode == VFO_MODE_TX) {    // TX power level
