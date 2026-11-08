@@ -349,13 +349,13 @@ void TMID_EncodePayload(const uint8_t input[TMID_DATA_BYTES],
 {
     uint8_t state = 0;
     memset(output, 0, TMID_CODED_BYTES);
-    for (unsigned int t = 0; t < TMID_CODED_BITS; ++t) {
-        const uint8_t bit = (t < TMID_INFO_BITS) ? ((input[t >> 3] >> (t & 7u)) & 1u) : 0u;
+    for (unsigned int t = 0; t < TMID_CODE_BITS; ++t) {
+        const uint8_t bit = (t < TMID_INFO_BITS)
+                          ? ((input[t >> 3] >> (t & 7u)) & 1u) : 0u;
         const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
-        const uint8_t parity = tmid_parity(reg);
         if (bit)
             output[t >> 3] |= (uint8_t)(1u << (t & 7u));
-        if (parity)
+        if (tmid_parity(reg))
             output[(TMID_PARITY_OFFSET + t) >> 3] |=
                 (uint8_t)(1u << ((TMID_PARITY_OFFSET + t) & 7u));
         state = reg & 0x3Fu;
@@ -366,15 +366,15 @@ bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
                         uint8_t output[TMID_DATA_BYTES])
 {
     uint16_t metric[64], next_metric[64];
-    uint8_t decisions[TMID_CODED_BITS][8];
+    uint8_t decisions[TMID_CODE_BITS][8];
     for (unsigned int s = 0; s < 64u; ++s)
         metric[s] = (s == 0u) ? 0u : TMID_METRIC_INF;
     memset(decisions, 0, sizeof(decisions));
 
-    for (unsigned int t = 0; t < TMID_CODED_BITS; ++t) {
+    for (unsigned int t = 0; t < TMID_CODE_BITS; ++t) {
         const uint8_t sys = (input[t >> 3] >> (t & 7u)) & 1u;
         const unsigned int pt = TMID_PARITY_OFFSET + t;
-        const uint8_t par = (input[pt >> 3] >> (7u - (pt & 7u))) & 1u;
+        const uint8_t par = (input[pt >> 3] >> (pt & 7u)) & 1u;
         for (unsigned int ns = 0; ns < 64u; ++ns) {
             const uint8_t bit = ns & 1u;
             const unsigned int p0 = ns >> 1;
@@ -395,17 +395,16 @@ bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
         memcpy(metric, next_metric, sizeof(metric));
     }
 
-    unsigned int state = 0;
-    for (unsigned int s = 1; s < 64u; ++s)
-        if (metric[s] < metric[state])
-            state = s;
-
+    /* Six appended zero bits force the encoder to the all-zero state. */
+    if (metric[0] >= TMID_METRIC_INF)
+        return false;
+    unsigned int state = 0u;
     memset(output, 0, TMID_DATA_BYTES);
-    for (int t = (int)TMID_INFO_BITS - 1; t >= 0; --t) {
+    for (int t = (int)TMID_CODE_BITS - 1; t >= 0; --t) {
         const uint8_t bit = state & 1u;
-        if (bit)
+        if ((unsigned int)t < TMID_INFO_BITS && bit)
             output[(unsigned int)t >> 3] |=
-                (uint8_t)(1u << (7u - ((unsigned int)t & 7u)));
+                (uint8_t)(1u << ((unsigned int)t & 7u));
         {
             const bool from_one = (decisions[t][state >> 3] &
                                    (uint8_t)(1u << (state & 7u))) != 0;
@@ -413,7 +412,7 @@ bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
         }
     }
 
-    if (output[0] != 0x01u ||
+    if (state != 0u || output[0] != 0x01u ||
         tmid_crc16(output, 8u) !=
             (uint16_t)(output[8] | ((uint16_t)output[9] << 8)) ||
         output[7] < '0' || output[7] > '9')
@@ -422,12 +421,12 @@ bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
     {
         bool padding = false;
         for (unsigned int i = 1; i < 7u; ++i) {
-            const char c = (char)output[i];
-            if (c == ' ') {
+            const char ch = (char)output[i];
+            if (ch == ' ') {
                 padding = true;
                 continue;
             }
-            if (padding || !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')))
+            if (padding || !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')))
                 return false;
         }
     }
