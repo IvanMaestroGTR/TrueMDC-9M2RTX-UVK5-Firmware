@@ -823,12 +823,7 @@ void RADIO_SetTxParameters(void) {
             Bandwidth = BK4819_FILTER_BW_WIDE;
             [[fallthrough]];
         case BK4819_FILTER_BW_WIDE:
-#ifdef ENABLE_AM_FIX
-            //				BK4819_SetFilterBandwidth(Bandwidth, gCurrentVfo->Modulation == MODULATION_AM && gSetting_AM_fix);
-                BK4819_SetFilterBandwidth(Bandwidth, true);
-#else
-            BK4819_SetFilterBandwidth(Bandwidth, false);
-#endif
+            BK4819_SetFilterBandwidth(Bandwidth, true);
             break;
 
         case BK4819_FILTER_BW_NARROW:
@@ -930,16 +925,13 @@ void RADIO_SetupAGC(bool listeningAM, bool disable) {
         BK4819_InitAGC(false);
     } else {
 #ifdef ENABLE_AM_FIX
-        if(gSetting_AM_fix) { // if AM fix active lock AGC so AM-fix can do it's job
-            BK4819_SetAGC(0);
-            AM_fix_enable(!disable);
-        }
-        else
+        // AM always uses AM Fix; disable the BK4819 internal AGC.
+        BK4819_SetAGC(0);
+        AM_fix_enable(!disable);
+#else
+        BK4819_SetAGC(!disable);
+        BK4819_InitAGC(true);
 #endif
-        {
-            BK4819_SetAGC(!disable);
-            BK4819_InitAGC(true);
-        }
     }
 }
 
