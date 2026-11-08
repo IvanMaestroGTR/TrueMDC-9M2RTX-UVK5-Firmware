@@ -208,10 +208,11 @@ void SETTINGS_InitEEPROM(void)
 #endif
 #endif
 
-    // 0F28..0F2F - AX.25 source callsign (six-character AX.25 address)
+    // 0F28..0F2F - AX.25 source callsign, SSID, and compact-format marker
     memcpy(Data, ax25_settings, 8);
     memcpy(gEeprom.AX25_CALLSIGN, Data, 6);
     gEeprom.AX25_CALLSIGN[6] = '\0';
+    gEeprom.AX25_SSID = (Data[6] <= 15u) ? Data[6] : 0u;
     {
         bool valid_callsign = true;
         bool padding_started = false;
@@ -670,6 +671,7 @@ void SETTINGS_SaveSettings(void)
     // 0F28..0F2F - AX.25 source callsign
     memset(State, 0xFF, sizeof(State));
     memcpy(State, gEeprom.AX25_CALLSIGN, 6);
+    State[6] = (uint8_t)(gEeprom.AX25_SSID & 0x0Fu);
     State[7] = 0xA5u; // marks the compact PTT-ID enum layout
     EEPROM_WriteBuffer(0x0F28, State, 8);
 #ifdef ENABLE_FLEETSYNC
