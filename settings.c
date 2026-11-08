@@ -287,22 +287,6 @@ EEPROM_ReadBuffer(0x0EF0, Data, sizeof(gEeprom.REVIVE_CODE));
 	}
 #endif
 
-    // 0EF8..0F07
-    EEPROM_ReadBuffer(0x0EF8, Data, sizeof(gEeprom.DTMF_UP_CODE));
-    if (DTMF_ValidateCodes((char *)Data, sizeof(gEeprom.DTMF_UP_CODE))) {
-        memcpy(gEeprom.DTMF_UP_CODE, Data, sizeof(gEeprom.DTMF_UP_CODE));
-    } else {
-        strcpy(gEeprom.DTMF_UP_CODE, "12345");
-    }
-
-    // 0F08..0F17
-    EEPROM_ReadBuffer(0x0F08, Data, sizeof(gEeprom.DTMF_DOWN_CODE));
-    if (DTMF_ValidateCodes((char *)Data, sizeof(gEeprom.DTMF_DOWN_CODE))) {
-        memcpy(gEeprom.DTMF_DOWN_CODE, Data, sizeof(gEeprom.DTMF_DOWN_CODE));
-    } else {
-        strcpy(gEeprom.DTMF_DOWN_CODE, "54321");
-    }
-
     // 0F18..0F1F
     EEPROM_ReadBuffer(0x0F18, Data, 8);
     gEeprom.SCAN_LIST_DEFAULT = (Data[0] < 3) ? Data[0] : 0;  // we now have 'all' channel scan option
