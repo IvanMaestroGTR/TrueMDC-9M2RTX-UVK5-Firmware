@@ -790,7 +790,6 @@ break;
             already_printed = true;
             break;
         }
-#ifdef ENABLE_MDC1200
         case MENU_AX25_CALLSIGN: {
             if (gIsInSubMenu) {
                 UI_PrintStringSmall(edit, menu_item_x1, menu_item_x2, 3);
