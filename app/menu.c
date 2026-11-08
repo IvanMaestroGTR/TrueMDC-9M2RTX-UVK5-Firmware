@@ -1118,12 +1118,6 @@ void MENU_ShowCurrentSetting(void) {
 //			gSubMenuSelection = gTxVfo->Modulation;
 //			break;
 
-#ifdef ENABLE_AM_FIX
-        case MENU_AM_FIX:
-            gSubMenuSelection = gSetting_AM_fix;
-            break;
-#endif
-
 #ifdef ENABLE_AM_FIX_TEST1
             case MENU_AM_FIX_TEST1:
                 gSubMenuSelection = gSetting_AM_fix_test1;
