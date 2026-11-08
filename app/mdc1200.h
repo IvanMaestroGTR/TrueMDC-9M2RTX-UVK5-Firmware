@@ -116,7 +116,10 @@ void MDC1200_init(void);
 
 /* TMID compact one-way callsign identity codec and receive path. */
 #define TMID_DATA_BYTES 10u
-#define TMID_CODED_BYTES (TMID_DATA_BYTES * 2u)
+#define TMID_TAIL_BITS 6u
+#define TMID_CODE_BITS (TMID_DATA_BYTES * 8u + TMID_TAIL_BITS)
+#define TMID_STREAM_BYTES ((TMID_CODE_BITS + 7u) / 8u)
+#define TMID_CODED_BYTES (TMID_STREAM_BYTES * 2u)
 void TMID_EncodePayload(const uint8_t input[TMID_DATA_BYTES], uint8_t output[TMID_CODED_BYTES]);
 bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES], uint8_t output[TMID_DATA_BYTES]);
 void TMID_RxService(void);
