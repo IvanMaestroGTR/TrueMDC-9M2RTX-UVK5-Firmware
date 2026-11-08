@@ -263,112 +263,6 @@ int MENU_GetLimits(uint8_t menu_id, int32_t *pMin, int32_t *pMax) {
                 break;
 #endif
 
-#ifdef ENABLE_AM_FIX
-            case MENU_AM_FIX:
-#endif
-//#ifdef ENABLE_AUDIO_BAR
-            //case MENU_MIC_BAR:
-//#endif
-        case MENU_BCL:
-            //	case MENU_BEEP:
-            //case MENU_AUTOLK:
-            //case MENU_S_ADD1:
-            //case MENU_S_ADD2:
-//        case MENU_STE:
-        case MENU_D_ST:
-#ifdef ENABLE_DTMF_CALLING
-#ifdef ENABLE_CUSTOM_SIDEFUNCTIONS
-            // case MENU_D_DCD: // DTMF DCD menu disabled
-#endif
-#endif
-        // case MENU_D_LIVE_DEC: // Live DTMF decoder menu disabled
-#ifdef ENABLE_NOAA
-            case MENU_NOAA_S:
-#endif
-//		case MENU_350TX:
-//		case MENU_200TX:
-//		case MENU_500TX:
-//		case MENU_350EN:
-//		case MENU_SCREN:
-//			*pMin = 0;
-//			*pMax = ARRAY_SIZE(gSubMenu_OFF_ON) - 1;
-//			break;
-            *pMin = 0;
-            *pMax = ARRAY_SIZE(gSubMenu_OFF_ON) - 1;
-            break;
-//		case MENU_AM:
-//			*pMin = 0;
-//			*pMax = ARRAY_SIZE(gModulationStr) - 1;
-//			break;
-
-        case MENU_SCR:
-            *pMin = 0;
-            *pMax = ARRAY_SIZE(gSubMenu_SCRAMBLER) - 1;
-            break;
-
-        case MENU_TOT:
-            *pMin = 0;
-            *pMax = ARRAY_SIZE(gSubMenu_TOT) - 1;
-            break;
-
-#ifdef ENABLE_VOX
-            //case MENU_VOX:
-#endif
-        case MENU_RP_STE:
-            if (gEeprom.PTT_ID == PTT_ID_MODE_DTMF_PRE ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_POST ||
-                gEeprom.PTT_ID == PTT_ID_MODE_DTMF_BOTH) {
-                *pMin = 3;
-                *pMax = 99;
-            } else {
-                *pMin = 2;
-                *pMax = 10;
-            }
-            break;
-
-        case MENU_MEM_CH:
-        case MENU_1_CALL:
-        case MENU_DEL_CH:
-        case MENU_MEM_NAME:
-            *pMin = 0;
-            *pMax = MR_CHANNEL_LAST;
-            break;
-
-        case MENU_SLIST1:
-        case MENU_SLIST2:
-            *pMin = -1;
-            *pMax = MR_CHANNEL_LAST;
-            break;
-
-        case MENU_SAVE:
-            *pMin = 0;
-            *pMax = ARRAY_SIZE(gSubMenu_SAVE) - 1;
-            break;
-
-        case MENU_MIC:
-            *pMin = 0;
-            *pMax = 4;
-            break;
-
-        case MENU_S_LIST:
-            *pMin = 0;
-            *pMax = 2;
-            break;
-        case MENU_PTT_ID:
-            *pMin = 0;
-            *pMax = ARRAY_SIZE(gSubMenu_PTT_ID) - 1;
-            break;
-
-//		case MENU_BAT_TXT:
-//			*pMin = 0;
-//			*pMax = ARRAY_SIZE(gSubMenu_BAT_TXT) - 1;
-//			break;
-#ifdef ENABLE_DTMF_CALLING
-            // case MENU_D_LIST: // DTMF Contact List disabled
-            //     *pMin = 1;
-            //     *pMax = 16;
-            //     break;
-#endif
 #ifdef ENABLE_F_CAL_MENU
             case MENU_F_CALI:
                 *pMin = -50;
@@ -805,13 +699,6 @@ void MENU_AcceptSetting(void) {
 //			gRequestSaveChannel = 1;
 //			return;
 
-#ifdef ENABLE_AM_FIX
-            case MENU_AM_FIX:
-                gSetting_AM_fix = gSubMenuSelection;
-                gVfoConfigureMode = VFO_CONFIGURE_RELOAD;
-                gFlagResetVfos    = true;
-                break;
-#endif
 
 #ifdef ENABLE_AM_FIX_TEST1
             case MENU_AM_FIX_TEST1:
