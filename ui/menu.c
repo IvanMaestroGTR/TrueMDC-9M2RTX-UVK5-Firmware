@@ -78,7 +78,7 @@ const t_menu_item MenuList[] =
                 {/*"ChDisp",*/ VOICE_ID_INVALID, MENU_MDF, STR_CHDISP}, // was "MDF"
                 {/*"BackLt",*/ VOICE_ID_INVALID, MENU_ABR, STR_BACKLT}, // was "ABR"
                 {/*"BLMax",*/  VOICE_ID_INVALID, MENU_ABR_MAX, STR_LIGHT},
-                {/*"AXCall",*/ VOICE_ID_INVALID, MENU_AX25_CALLSIGN, "AXCall"},
+                {/*"Call",*/ VOICE_ID_INVALID, MENU_AX25_CALLSIGN, "Call"},
 #ifdef ENABLE_MDC1200
                 {/*"MDCID",*/  VOICE_ID_INVALID, MENU_MDC_ID, MDC_ID},
  #ifdef ENABLE_FLEETSYNC
@@ -310,9 +310,9 @@ const char *const gSubMenu_PTT_ID[] =
     "Pre FSync",
     "Post FSync",
     "Both FSync",
-    "Pre AX.25",
-    "Post AX.25",
-    "Both AX.25"
+    "Pre Call",
+    "Post Call",
+    "Both Call"
 };
 
 #ifdef ENABLE_MDC1200
@@ -792,12 +792,12 @@ break;
                 if (edit_index >= 0 && edit_index < 8 && edit_index != 6)
                     UI_PrintStringSmall("^", menu_item_x1 + (((menu_item_x2 - menu_item_x1) - 56) + 1) / 2 + (7 * edit_index), 0, 4);
             } else {
-                sprintf(String, "%s-%X", gEeprom.AX25_CALLSIGN, gEeprom.AX25_SSID);
+                sprintf(String, "%s-%u", gEeprom.AX25_CALLSIGN, (unsigned int)(gEeprom.AX25_SSID % 10u));
                 UI_PrintStringSmall(String, menu_item_x1, menu_item_x2, 3);
                 edit_index = -1;
                 memcpy(edit, gEeprom.AX25_CALLSIGN, 6);
                 edit[6] = '-';
-                edit[7] = (char)(gEeprom.AX25_SSID < 10u ? '0' + gEeprom.AX25_SSID : 'A' + gEeprom.AX25_SSID - 10u);
+                edit[7] = (char)('0' + (gEeprom.AX25_SSID % 10u));
                 edit[8] = '\0';
             }
             already_printed = true;
