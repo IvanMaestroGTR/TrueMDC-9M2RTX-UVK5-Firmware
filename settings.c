@@ -125,7 +125,6 @@ void SETTINGS_InitEEPROM(void)
     gEeprom.field38_0x33                 = (((Data[0] >> 3) & 7) <= TALK_PERMIT_TONE_AUTO ?
                                            (Data[0] >> 3) & 7 : TALK_PERMIT_TONE_OFF) |
                                            (Data[0] & 0x40);
-    gEeprom.END_CALL_TONE                = (Data[4] == 0xA5) ? (Data[7] == 1) : true;
     gEeprom.SCREEN_INVERT         = (Data[3] < 2) ? Data[3] : false;
 
     gEeprom.MDC1200_ID     =((uint16_t) (Data[2] << 8))|((uint16_t)(Data[1] ));
@@ -618,7 +617,7 @@ void SETTINGS_SaveSettings(void)
     State[4] = 0xA5;
     State[5] = gEeprom.SCAN_RESUME_MODE;
     State[6] = 0;//gEeprom.AUTO_KEYPAD_LOCK;
-    State[7] = gEeprom.END_CALL_TONE;
+    State[7] = 0xFF; // reserved; legacy call-end tone setting removed
     EEPROM_WriteBuffer(0x0E90, State,8);
 
 #ifdef ENABLE_CUSTOM_SIDEFUNCTIONS
