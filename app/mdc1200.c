@@ -450,21 +450,26 @@ static bool tmid_mode_selected(void)
 static void tmid_rx_arm(void)
 {
     /*
-     * TMID is software-modulated 1200/2200 AFSK. The BK4819 has no
-     * 1200/2200 mode, so use its documented FFSK 1200/2400 RX mode.
-     * The on-air sync is two bytes (A5 A5), with a six-byte alternating
-     * warble preamble. Do not enable the BK4819 hardware scrambler or CRC:
-     * TMID performs FEC and CRC in software.
+     * Match the proven TA1JS UV-K5 APRS Bell-202 receiver configuration.
+     * It receives 1200/2200-Hz AFSK with the BK4819 FFSK 1200/1800 RX
+     * profile (not the 1200/2400 profile previously used here).
+     *
+     * TMID keeps its own A5 A5 sync, FEC and CRC. The transmitter's long
+     * 2200/1200 warble is not an AA/55 hardware preamble, so use the same
+     * minimal preamble selection as the working APRS receiver and let the
+     * configured two-byte sync acquire the frame. Hardware scrambling and
+     * CRC remain disabled.
      */
     BK4819_WriteRegister(BK4819_REG_02, 0u);
     BK4819_WriteRegister(BK4819_REG_3F, 0u);
     BK4819_RX_TurnOn();
 
-    BK4819_WriteRegister(BK4819_REG_70, 0x00E0u); /* Tone-2 / FSK gain */
-    BK4819_WriteRegister(BK4819_REG_72, 0x3065u); /* 1200-baud FSK rate */
-    BK4819_WriteRegister(BK4819_REG_58, 0x1009u); /* FFSK 1200/2400 RX, 2.4-kHz BW, enable */
-    BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u); /* two-byte TMID sync */
-    BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u); /* hardware CRC disabled */
+    /* Same RX gain / tone-2 path and 1200-baud timing as TA1JS APRS. */
+    BK4819_WriteRegister(BK4819_REG_70, 0x80E0u);
+    BK4819_WriteRegister(BK4819_REG_72, 0x3065u);
+    BK4819_WriteRegister(BK4819_REG_58, 0x3FC3u);
+    BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
+    BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u);
     BK4819_WriteRegister(BK4819_REG_5D,
                          (uint16_t)((TMID_CODED_BYTES - 1u) << 8));
     BK4819_WriteRegister(BK4819_REG_5E, (64u << 3) | 4u);
@@ -477,11 +482,9 @@ static void tmid_rx_arm(void)
                    BK4819_REG_3F_FSK_FIFO_ALMOST_FULL);
     }
 
-    /* REG_59: clear RX FIFO, then enable RX; 6-byte preamble, 2-byte sync.
-     * Bit 13 (hardware scrambling) remains clear for the software AFSK frame.
-     */
-    BK4819_WriteRegister(BK4819_REG_59, 0x4050u);
-    BK4819_WriteRegister(BK4819_REG_59, 0x1050u);
+    /* Proven APRS RX FIFO sequence: clear, then enable; 2-byte sync. */
+    BK4819_WriteRegister(BK4819_REG_59, 0x4000u);
+    BK4819_WriteRegister(BK4819_REG_59, 0x1000u);
 
     tmid_rx_count = 0;
     tmid_rx_capturing = false;
