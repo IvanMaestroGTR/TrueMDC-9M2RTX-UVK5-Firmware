@@ -457,9 +457,7 @@ static void tmid_rx_arm(void)
      */
     BK4819_WriteRegister(BK4819_REG_70, (1u << 7) | 96u); /* enable Tone-2 / FSK gain */
     BK4819_WriteRegister(BK4819_REG_72, 12389u); /* 1200-baud FSK rate */
-    BK4819_WriteRegister(BK4819_REG_58,
-        (1u << 13) | (4u << 10) | (3u << 8) |
-        (4u << 1) | 1u);
+    BK4819_WriteRegister(BK4819_REG_58, 0x00C1u); /* proven BK4819 FSK RX mode */
     BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
     BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u); /* disable hardware CRC */
     BK4819_WriteRegister(BK4819_REG_5D,
