@@ -126,6 +126,11 @@ void TMID_RxService(void);
 void TMID_HandleRxInterrupts(uint16_t interrupt_bits);
 extern char tmid_rx_callsign[7];
 extern uint8_t tmid_rx_ssid;
+extern volatile uint8_t tmid_diag_sync;
+extern volatile uint8_t tmid_diag_fifo;
+extern volatile uint8_t tmid_diag_finished;
+extern volatile uint8_t tmid_diag_bytes;
+extern volatile char tmid_diag_result;
 
 
 uint16_t extractHex(const char *str);
