@@ -449,6 +449,9 @@ void MENU_AcceptSetting(void) {
                 gEeprom.AX25_CALLSIGN[i] = c;
             }
             gEeprom.AX25_CALLSIGN[6] = '\0';
+            gEeprom.AX25_SSID = (edit[7] >= '0' && edit[7] <= '9') ?
+                                (uint8_t)(edit[7] - '0') :
+                                (uint8_t)(edit[7] - 'A' + 10);
             gRequestSaveSettings = true;
             return;
 #ifdef ENABLE_MDC1200
@@ -1217,7 +1220,7 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
     uint8_t now_menu = UI_MENU_GetCurrentMenuId();
 #ifdef ENABLE_MDC1200_EDIT //���뷨����
     uint8_t end_index = now_menu == MENU_MEM_NAME ? MAX_EDIT_INDEX :
-                        now_menu == MENU_AX25_CALLSIGN ? 6 :
+                        now_menu == MENU_AX25_CALLSIGN ? 8 :
                         now_menu == MENU_FLEETSYNC_UNIT ? 8 : 4;
 #else
     uint8_t end_index = (now_menu == MENU_AX25_CALLSIGN) ? 6 : MAX_EDIT_INDEX;
@@ -1547,12 +1550,16 @@ static void MENU_Key_MENU(const bool bKeyPressed, const bool bKeyHeld) {
     if (UI_MENU_GetCurrentMenuId() == MENU_AX25_CALLSIGN) {
         if (edit_index < 0) {
             memcpy(edit, gEeprom.AX25_CALLSIGN, 6);
-            edit[6] = '\0';
+            edit[6] = '-';
+            edit[7] = (char)(gEeprom.AX25_SSID < 10u ? '0' + gEeprom.AX25_SSID : 'A' + gEeprom.AX25_SSID - 10u);
+            edit[8] = '\0';
             edit_index = 0;
             memcpy(edit_original, edit, sizeof(edit_original));
             return;
-        } else if (edit_index < 6) {
-            if (++edit_index < 6)
+        } else if (edit_index < 8) {
+            if (++edit_index == 6)
+                ++edit_index; /* position 6 is the fixed SSID separator */
+            if (edit_index < 8)
                 return;
             gAskForConfirmation = 0;
         }
@@ -1695,6 +1702,13 @@ static void MENU_Key_UP_DOWN(bool bKeyPressed, bool bKeyHeld, int8_t Direction) 
                 while (pos < (int)sizeof(alphabet) - 1 && alphabet[pos] != edit[edit_index]) ++pos;
                 pos = (pos + Direction + (int)sizeof(alphabet) - 1) % ((int)sizeof(alphabet) - 1);
                 edit[edit_index] = alphabet[pos];
+                gRequestDisplayScreen = DISPLAY_MENU;
+            } else if (bKeyPressed && edit_index == 7) {
+                const char ssid_hex[] = "0123456789ABCDEF";
+                int pos = 0;
+                while (pos < 16 && ssid_hex[pos] != edit[7]) ++pos;
+                pos = (pos + Direction + 16) % 16;
+                edit[7] = ssid_hex[pos];
                 gRequestDisplayScreen = DISPLAY_MENU;
             }
             return;
