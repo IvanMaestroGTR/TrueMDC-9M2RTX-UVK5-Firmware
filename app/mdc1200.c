@@ -456,7 +456,8 @@ static void tmid_rx_arm(void)
      * rather than the previous 1200/1800 setting. Keep the TX
      * generator untouched: TMID still transmits 1200/2200 Hz.
      */
-    BK4819_WriteRegister(BK4819_REG_70, 0u);
+    BK4819_WriteRegister(BK4819_REG_70, (1u << 7) | 96u); /* enable Tone-2 / FSK gain */
+    BK4819_WriteRegister(BK4819_REG_72, 12389u); /* 1200-baud FSK rate */
     BK4819_WriteRegister(BK4819_REG_58,
         (1u << 13) | (4u << 10) | (3u << 8) |
         (4u << 1) | 1u);
@@ -476,6 +477,7 @@ static void tmid_rx_arm(void)
     BK4819_WriteRegister(BK4819_REG_59, 0x1000u); /* enable FSK RX */
     tmid_rx_count = 0;
     tmid_rx_capturing = false;
+    tmid_rx_inverted = false;
     tmid_rx_armed = true;
 }
 
@@ -559,7 +561,9 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
         if (tmid_rx_capturing && tmid_rx_count < TMID_CODED_BYTES) {
             uint16_t count = BK4819_ReadRegister(BK4819_REG_5E) & 7u;
             while (count-- && tmid_rx_count < TMID_CODED_BYTES) {
-                const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
+                uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
+                if (tmid_rx_inverted)
+                    word ^= 0xFFFFu;
                 tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
                 if (tmid_rx_count < TMID_CODED_BYTES)
                     tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
