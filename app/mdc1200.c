@@ -450,28 +450,39 @@ static bool tmid_mode_selected(void)
 static void tmid_rx_arm(void)
 {
     /*
-     * The BK4819 has no native 1200/2200 FFSK mode. Use its
-     * 1200/2400 receiver mode (closest supported mark/space pair)
-     * rather than the previous 1200/1800 setting. Keep the TX
-     * generator untouched: TMID still transmits 1200/2200 Hz.
+     * TMID is software-modulated 1200/2200 AFSK. The BK4819 has no
+     * 1200/2200 mode, so use its documented FFSK 1200/2400 RX mode.
+     * The on-air sync is two bytes (A5 A5), with a six-byte alternating
+     * warble preamble. Do not enable the BK4819 hardware scrambler or CRC:
+     * TMID performs FEC and CRC in software.
      */
-    BK4819_WriteRegister(BK4819_REG_70, (1u << 7) | 96u); /* enable Tone-2 / FSK gain */
-    BK4819_WriteRegister(BK4819_REG_72, 12389u); /* 1200-baud FSK rate */
-    BK4819_WriteRegister(BK4819_REG_58, 0x00C1u); /* proven BK4819 FSK RX mode */
-    BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
-    BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u); /* disable hardware CRC */
+    BK4819_WriteRegister(BK4819_REG_02, 0u);
+    BK4819_WriteRegister(BK4819_REG_3F, 0u);
+    BK4819_RX_TurnOn();
+
+    BK4819_WriteRegister(BK4819_REG_70, 0x00E0u); /* Tone-2 / FSK gain */
+    BK4819_WriteRegister(BK4819_REG_72, 0x3065u); /* 1200-baud FSK rate */
+    BK4819_WriteRegister(BK4819_REG_58, 0x1009u); /* FFSK 1200/2400 RX, 2.4-kHz BW, enable */
+    BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u); /* two-byte TMID sync */
+    BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u); /* hardware CRC disabled */
     BK4819_WriteRegister(BK4819_REG_5D,
                          (uint16_t)((TMID_CODED_BYTES - 1u) << 8));
     BK4819_WriteRegister(BK4819_REG_5E, (64u << 3) | 4u);
+
     {
-        const uint16_t mask = BK4819_ReadRegister(BK4819_REG_3F);
+        const uint16_t mask = tmid_irq_mask_saved ? tmid_saved_irq_mask : 0u;
         BK4819_WriteRegister(BK4819_REG_3F,
-            mask | BK4819_REG_02_FSK_RX_FINISHED |
-                   BK4819_REG_02_FSK_FIFO_ALMOST_FULL |
-                   BK4819_REG_02_FSK_RX_SYNC);
+            mask | BK4819_REG_3F_FSK_RX_SYNC |
+                   BK4819_REG_3F_FSK_RX_FINISHED |
+                   BK4819_REG_3F_FSK_FIFO_ALMOST_FULL);
     }
-    BK4819_WriteRegister(BK4819_REG_59, 0x4000u); /* clear RX FIFO */
-    BK4819_WriteRegister(BK4819_REG_59, 0x1000u); /* enable FSK RX */
+
+    /* REG_59: clear RX FIFO, then enable RX; 6-byte preamble, 2-byte sync.
+     * Bit 13 (hardware scrambling) remains clear for the software AFSK frame.
+     */
+    BK4819_WriteRegister(BK4819_REG_59, 0x4050u);
+    BK4819_WriteRegister(BK4819_REG_59, 0x1050u);
+
     tmid_rx_count = 0;
     tmid_rx_capturing = false;
     tmid_rx_armed = true;
