@@ -578,6 +578,9 @@ void TMID_RxService(void)
     }
 }
 
+static void tmid_rx_finish(void);
+static void tmid_rx_read_fifo(uint8_t words);
+
 /* Called at the firmware's 10 ms cadence, not from the tight main-loop spin. */
 void TMID_RxTimeSlice10ms(void)
 {
