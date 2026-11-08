@@ -362,8 +362,8 @@ void TMID_EncodePayload(const uint8_t input[TMID_DATA_BYTES],
     }
 }
 
-bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
-                        uint8_t output[TMID_DATA_BYTES])
+static bool TMID_DecodePayloadCore(const uint8_t input[TMID_CODED_BYTES],
+                                    uint8_t output[TMID_DATA_BYTES])
 {
     uint16_t metric[64], next_metric[64];
     uint8_t decisions[TMID_CODE_BITS][8];
@@ -431,6 +431,37 @@ bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
         }
     }
     return output[1] != ' ';
+}
+
+/*
+ * BK4819 FSK FIFO bit order is not consistent across the software transmit
+ * convention and the raw receive register convention. Try both bit orders
+ * and both polarities; the payload CRC and format checks in the core decoder
+ * are the acceptance gate, so an alternate interpretation cannot create a
+ * false callsign from a damaged frame.
+ */
+static uint8_t tmid_reverse_bits(uint8_t value)
+{
+    value = (uint8_t)(((value & 0x55u) << 1) | ((value >> 1) & 0x55u));
+    value = (uint8_t)(((value & 0x33u) << 2) | ((value >> 2) & 0x33u));
+    return (uint8_t)((value << 4) | (value >> 4));
+}
+
+bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
+                        uint8_t output[TMID_DATA_BYTES])
+{
+    uint8_t candidate[TMID_CODED_BYTES];
+    for (unsigned int reverse = 0; reverse < 2u; ++reverse) {
+        for (unsigned int invert = 0; invert < 2u; ++invert) {
+            for (unsigned int i = 0; i < TMID_CODED_BYTES; ++i) {
+                uint8_t value = reverse ? tmid_reverse_bits(input[i]) : input[i];
+                candidate[i] = invert ? (uint8_t)~value : value;
+            }
+            if (TMID_DecodePayloadCore(candidate, output))
+                return true;
+        }
+    }
+    return false;
 }
 
 static uint8_t tmid_rx_buffer[TMID_CODED_BYTES];
@@ -552,20 +583,8 @@ static void tmid_rx_finish(void)
     bool valid = false;
     tmid_diag_bytes = tmid_rx_count;
 
-    if (tmid_rx_count == TMID_CODED_BYTES) {
+    if (tmid_rx_count == TMID_CODED_BYTES)
         valid = TMID_DecodePayload(tmid_rx_buffer, decoded);
-
-        /*
-         * Some BK4819 revisions report SyncN/SyncP differently.
-         * CRC-16 makes a polarity retry safe: accept only a complete
-         * Viterbi decode with a valid TMID payload and CRC.
-         */
-        if (!valid) {
-            for (unsigned int i = 0; i < TMID_CODED_BYTES; ++i)
-                tmid_rx_buffer[i] ^= 0xFFu;
-            valid = TMID_DecodePayload(tmid_rx_buffer, decoded);
-        }
-    }
 
     if (valid) {
         tmid_diag_result = 'G';
