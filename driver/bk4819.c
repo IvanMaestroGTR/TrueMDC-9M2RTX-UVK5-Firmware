@@ -373,70 +373,34 @@ void BK4819_InitAGC(bool amModulation) {
 
 
 
-static uint8_t BK4819_TMIDParity(uint8_t v)
-{
-    v &= 0x65u;
-    v ^= v >> 4;
-    v ^= v >> 2;
-    v ^= v >> 1;
-    return v & 1u;
-}
-
-static void BK4819_TMIDEncodePayload(const uint8_t input[TMID_DATA_BYTES],
-                                     uint8_t output[TMID_CODED_BYTES])
-{
-    uint8_t state = 0;
-    memset(output, 0, TMID_CODED_BYTES);
-    for (unsigned int t = 0; t < TMID_CODE_BITS; ++t) {
-        const uint8_t bit = (t < TMID_DATA_BYTES * 8u)
-                          ? ((input[t >> 3] >> (t & 7u)) & 1u) : 0u;
-        const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
-        if (bit)
-            output[t >> 3] |= (uint8_t)(1u << (t & 7u));
-        if (BK4819_TMIDParity(reg))
-            output[(TMID_STREAM_BYTES * 8u + t) >> 3] |=
-                (uint8_t)(1u << ((TMID_STREAM_BYTES * 8u + t) & 7u));
-        state = reg & 0x3Fu;
-    }
-}
-
 /*
- * TrueMDC one-way callsign beacon.
- * 1200-baud AFSK: 1200 Hz = 1, 1800 Hz = 0.
- * Packet: two-byte A5 A5 sync, version, six ASCII callsign bytes, one ASCII SSID digit,
- * CRC-16/MODBUS and rate-1/2 convolutional FEC. No HDLC or bit stuffing.
- * The existing warble preamble sequence, placement and configured cycle count
- * are intentionally preserved; only its two tone frequencies are changed.
+ * TrueMDC one-way callsign packet.
+ * 1200-baud AFSK: 1200 Hz mark, 2200 Hz space.
+ * Packet: A5 A5 sync, six ASCII callsign characters, one ASCII SSID digit,
+ * and CRC-16/MODBUS. This first-stage format deliberately has no FEC.
+ * The pre-existing warble sequence, symbol counts, configured cycle count,
+ * and PRE/POST placement remain unchanged.
  */
 void BK4819_SendTMIDBeacon(const bool with_preamble)
 {
-    uint8_t frame[2u + TMID_CODED_BYTES];
-    uint8_t payload[TMID_DATA_BYTES];
-    uint16_t crc = 0xFFFFu;
+    uint8_t frame[2u + TMID_PACKET_BYTES];
+    uint8_t identity[TMID_ID_BYTES];
     uint16_t saved_reg30;
     uint8_t tone_mark = 2u;
     const uint16_t mark = scale_freq(1200u);
-    const uint16_t space = scale_freq(1800u);
+    const uint16_t space = scale_freq(2200u);
     const uint32_t bit_ticks_q8 = FSK_TX_BIT_TICKS << 8;
     const uint32_t reload = SysTick->LOAD + 1u;
     uint32_t acc_q8 = 0u, last;
     const uint32_t primask = __get_PRIMASK();
     static const uint8_t sync[2] = {0xA5u, 0xA5u};
 
-    payload[0] = 0x01u; /* TMID version */
     for (unsigned int i = 0; i < 6u; ++i)
-        payload[1u + i] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
-    payload[7] = (uint8_t)('0' + (gEeprom.AX25_SSID % 10u));
-    for (unsigned int i = 0; i < 8u; ++i) {
-        crc ^= payload[i];
-        for (unsigned int b = 0; b < 8u; ++b)
-            crc = (crc & 1u) ? (uint16_t)((crc >> 1) ^ 0xA001u)
-                             : (uint16_t)(crc >> 1);
-    }
-    payload[8] = (uint8_t)(crc & 0xFFu);
-    payload[9] = (uint8_t)(crc >> 8);
+        identity[i] = (uint8_t)gEeprom.AX25_CALLSIGN[i];
+    identity[6] = (uint8_t)('0' + (gEeprom.AX25_SSID % 10u));
+
     memcpy(frame, sync, sizeof(sync));
-    BK4819_TMIDEncodePayload(payload, frame + sizeof(sync));
+    TMID_EncodePayload(identity, frame + sizeof(sync));
 
     saved_reg30 = BK4819_ReadRegister(BK4819_REG_30);
     BK4819_EnterTxMute();
@@ -472,7 +436,11 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
             BEACON_SEND_SYMBOL((byte_ >> bit_) & 1u); \
     } while (0)
 
-    /* Keep the existing warble pattern and configured cycle count unchanged. */
+    /*
+     * Keep the established warble exactly: 33 space symbols then 20 mark
+     * symbols per extended cycle; the short form remains 20 then 33.
+     * Only the space frequency changes from 1800 to the requested 2200 Hz.
+     */
     tone_mark = 2u;
     if (with_preamble && gEeprom.MDC1200_PREAMBLE_DURATION > 1u) {
         for (unsigned int cycle = 0; cycle < gEeprom.MDC1200_PREAMBLE_DURATION; ++cycle) {
@@ -487,11 +455,7 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
     for (unsigned int i = 0; i < sizeof(frame); ++i)
         BEACON_SEND_BYTE(frame[i]);
 
-    /*
-     * TMID end marker: 1975 Hz held for the same 33-symbol interval as
-     * the long 1800 Hz preamble segment (33 / 1200 baud = 27.5 ms).
-     * Keep it outside the coded frame so it is not passed to the decoder.
-     */
+    /* Retain the separate 1975-Hz, 33-symbol end marker. */
     BK4819_WriteRegister(BK4819_REG_71, scale_freq(1975u));
     for (unsigned int p = 0; p < 33u; ++p)
         BEACON_WAIT_SYMBOL();
