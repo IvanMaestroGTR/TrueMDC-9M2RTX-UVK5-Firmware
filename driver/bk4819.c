@@ -435,12 +435,12 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
         for (unsigned int bit_ = 0; bit_ < 8u; ++bit_) \
             BEACON_SEND_SYMBOL((byte_ >> bit_) & 1u); \
     } while (0)
-#define BEACON_SEND_UART_BYTE(v) do { \
+#define BEACON_SEND_UART_BYTE(v, stop_) do { \
         const uint8_t byte_ = (uint8_t)(v); \
         BEACON_SEND_SYMBOL(0u); /* start bit: space */ \
         for (unsigned int bit_ = 0; bit_ < 8u; ++bit_) \
             BEACON_SEND_SYMBOL((byte_ >> bit_) & 1u); \
-        BEACON_SEND_SYMBOL(1u); /* post/stop bit: mark */ \
+        if (stop_) BEACON_SEND_SYMBOL(1u); /* stop bit except final octet */ \
     } while (0)
 
     /*
@@ -472,7 +472,7 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
 
     /* Every following octet has an explicit start bit and one post/stop bit. */
     for (unsigned int i = sizeof(sync); i < sizeof(frame); ++i)
-        BEACON_SEND_UART_BYTE(frame[i]);
+        BEACON_SEND_UART_BYTE(frame[i], i + 1u < sizeof(frame));
 
     /* Retain the separate 1975-Hz, 33-symbol end marker. */
     BK4819_WriteRegister(BK4819_REG_71, scale_freq(1975u));
