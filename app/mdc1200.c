@@ -308,11 +308,16 @@ bool MDC1200_process_rx_data(
 
 
 /* -------------------------------------------------------------------------
- * TMID raw packet codec and receive path.
+ * TMID independent raw FFSK packet receiver.
  *
- * Stage 1 intentionally has no FEC: sync is acquired by the BK4819, then
- * seven identity bytes (six callsign characters + one SSID digit) and a
- * CRC-16/MODBUS are captured. FEC can be added after raw decoding is proven.
+ * Air format:
+ *   1200 baud, 1200 Hz mark / 2200 Hz space
+ *   A5 A5 raw sync word (16 bits, LSB first)
+ *   9 asynchronous octets: start(0), data(8 LSB first), stop(1)
+ *   identity = 6 callsign ASCII bytes + 1 ASCII SSID digit
+ *   CRC-16/MODBUS, low byte first
+ *
+ * No convolutional code, interleaver, HDLC or legacy MDC decoder is used.
  * ------------------------------------------------------------------------- */
 char tmid_rx_callsign[7];
 uint8_t tmid_rx_ssid;
@@ -332,9 +337,8 @@ static uint16_t tmid_crc16(const uint8_t *p, unsigned int n)
 void TMID_EncodePayload(const uint8_t input[TMID_ID_BYTES],
                         uint8_t output[TMID_PACKET_BYTES])
 {
-    uint16_t crc;
+    const uint16_t crc = tmid_crc16(input, TMID_ID_BYTES);
     memcpy(output, input, TMID_ID_BYTES);
-    crc = tmid_crc16(input, TMID_ID_BYTES);
     output[7] = (uint8_t)crc;
     output[8] = (uint8_t)(crc >> 8);
 }
@@ -359,26 +363,46 @@ static bool tmid_payload_valid(const uint8_t *p)
     return p[0] != ' ' && p[6] >= '0' && p[6] <= '9';
 }
 
-static uint8_t tmid_reverse_bits(uint8_t value)
+static uint8_t tmid_get_raw_bit(const uint8_t *raw, unsigned int bit)
 {
-    value = (uint8_t)(((value & 0x55u) << 1) | ((value >> 1) & 0x55u));
-    value = (uint8_t)(((value & 0x33u) << 2) | ((value >> 2) & 0x33u));
-    return (uint8_t)((value << 4) | (value >> 4));
+    return (uint8_t)((raw[bit >> 3] >> (bit & 7u)) & 1u);
 }
 
-/* Try both byte bit-orders and polarities; CRC + callsign validation gates acceptance. */
-bool TMID_DecodePayload(const uint8_t input[TMID_PACKET_BYTES],
-                        uint8_t output[TMID_ID_BYTES])
+/*
+ * Decode framed octets from the raw post-sync FIFO bitstream. We explicitly
+ * check every start and stop bit. A candidate is accepted only after CRC and
+ * callsign/SSID validation, so a false sync or a framing slip cannot display
+ * a random ID.
+ */
+static bool tmid_decode_serial(const uint8_t *raw,
+                               uint8_t output[TMID_ID_BYTES])
 {
-    uint8_t candidate[TMID_PACKET_BYTES];
-    for (unsigned int reverse = 0; reverse < 2u; ++reverse) {
-        for (unsigned int invert = 0; invert < 2u; ++invert) {
-            for (unsigned int i = 0; i < TMID_PACKET_BYTES; ++i) {
-                const uint8_t value = reverse ? tmid_reverse_bits(input[i]) : input[i];
-                candidate[i] = invert ? (uint8_t)~value : value;
+    uint8_t packet[TMID_PACKET_BYTES];
+
+    for (unsigned int invert = 0; invert < 2u; ++invert) {
+        for (unsigned int offset = 0; offset < 7u; ++offset) {
+            bool framing_ok = true;
+            unsigned int bit = offset;
+
+            for (unsigned int octet = 0; octet < TMID_PACKET_BYTES; ++octet) {
+                uint8_t value = 0;
+                if ((tmid_get_raw_bit(raw, bit++) ^ invert) != 0u) {
+                    framing_ok = false; /* start bit must be space / 0 */
+                    break;
+                }
+                for (unsigned int data_bit = 0; data_bit < 8u; ++data_bit) {
+                    const uint8_t data = tmid_get_raw_bit(raw, bit++) ^ invert;
+                    value |= (uint8_t)(data << data_bit);
+                }
+                if ((tmid_get_raw_bit(raw, bit++) ^ invert) != 1u) {
+                    framing_ok = false; /* stop bit must be mark / 1 */
+                    break;
+                }
+                packet[octet] = value;
             }
-            if (tmid_payload_valid(candidate)) {
-                memcpy(output, candidate, TMID_ID_BYTES);
+
+            if (framing_ok && tmid_payload_valid(packet)) {
+                memcpy(output, packet, TMID_ID_BYTES);
                 return true;
             }
         }
@@ -386,26 +410,13 @@ bool TMID_DecodePayload(const uint8_t input[TMID_PACKET_BYTES],
     return false;
 }
 
-static uint8_t tmid_rx_buffer[TMID_PACKET_BYTES];
+static uint8_t tmid_rx_buffer[TMID_SERIAL_BYTES];
 static uint8_t tmid_rx_count;
 static uint8_t tmid_rx_idle_ticks;
 static bool tmid_rx_armed;
 static bool tmid_rx_capturing;
 static bool tmid_irq_mask_saved;
 static uint16_t tmid_saved_irq_mask;
-
-/* Receive-stage counters shown by the existing TMID debug display. */
-volatile uint8_t tmid_diag_sync;
-volatile uint8_t tmid_diag_fifo;
-volatile uint8_t tmid_diag_finished;
-volatile uint8_t tmid_diag_bytes;
-volatile char tmid_diag_result = '-';
-
-static void tmid_diag_increment(volatile uint8_t *value)
-{
-    if (*value < 99u)
-        ++*value;
-}
 
 static bool tmid_mode_selected(void)
 {
@@ -424,25 +435,19 @@ static void tmid_rx_restart_capture(void)
 
 static void tmid_rx_arm(void)
 {
-    tmid_diag_sync = 0;
-    tmid_diag_fifo = 0;
-    tmid_diag_finished = 0;
-    tmid_diag_bytes = 0;
-    tmid_diag_result = '-';
-
     BK4819_WriteRegister(BK4819_REG_02, 0u);
     BK4819_WriteRegister(BK4819_REG_3F, 0u);
     BK4819_RX_TurnOn();
 
     /* 2200-Hz space / 1200-Hz mark FFSK receive pair. */
     BK4819_WriteRegister(BK4819_REG_70, 0x80E0u);
-    BK4819_WriteRegister(BK4819_REG_71, 22714u); /* 2200 Hz */
-    BK4819_WriteRegister(BK4819_REG_72, 0x3065u); /* 1200 Hz */
+    BK4819_WriteRegister(BK4819_REG_71, 22714u);
+    BK4819_WriteRegister(BK4819_REG_72, 0x3065u);
     BK4819_WriteRegister(BK4819_REG_58, 0x3FC3u);
     BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
     BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u);
     BK4819_WriteRegister(BK4819_REG_5D,
-                         (uint16_t)((TMID_PACKET_BYTES - 1u) << 8));
+                         (uint16_t)((TMID_SERIAL_BYTES - 1u) << 8));
     BK4819_WriteRegister(BK4819_REG_5E, (64u << 3) | 4u);
 
     {
@@ -527,21 +532,15 @@ void TMID_RxTimeSlice10ms(void)
 static void tmid_rx_finish(void)
 {
     uint8_t decoded[TMID_ID_BYTES];
-    bool valid = false;
-    tmid_diag_bytes = tmid_rx_count;
-
-    if (tmid_rx_count == TMID_PACKET_BYTES)
-        valid = TMID_DecodePayload(tmid_rx_buffer, decoded);
+    const bool valid = (tmid_rx_count == TMID_SERIAL_BYTES) &&
+                       tmid_decode_serial(tmid_rx_buffer, decoded);
 
     if (valid) {
-        tmid_diag_result = 'G';
         memcpy(tmid_rx_callsign, decoded, 6u);
         tmid_rx_callsign[6] = '\0';
         tmid_rx_ssid = (uint8_t)(decoded[6] - '0');
         mdc1200_rx_ready_tick_500ms = 10u;
         gUpdateDisplay = true;
-    } else {
-        tmid_diag_result = (tmid_rx_count == TMID_PACKET_BYTES) ? 'C' : 'L';
     }
 
     tmid_rx_count = 0;
@@ -550,10 +549,10 @@ static void tmid_rx_finish(void)
 
 static void tmid_rx_read_fifo(uint8_t words)
 {
-    while (words-- && tmid_rx_count < TMID_PACKET_BYTES) {
+    while (words-- && tmid_rx_count < TMID_SERIAL_BYTES) {
         const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
         tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
-        if (tmid_rx_count < TMID_PACKET_BYTES)
+        if (tmid_rx_count < TMID_SERIAL_BYTES)
             tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
     }
 }
@@ -562,28 +561,23 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
 {
     if (!tmid_rx_armed)
         return;
+
     if (interrupt_bits & BK4819_REG_02_FSK_RX_SYNC) {
-        tmid_diag_increment(&tmid_diag_sync);
-        gUpdateDisplay = true;
         tmid_rx_count = 0;
         tmid_rx_idle_ticks = 0;
         tmid_rx_capturing = true;
     }
+
     if ((interrupt_bits & BK4819_REG_02_FSK_FIFO_ALMOST_FULL) &&
         tmid_rx_capturing) {
-        tmid_diag_increment(&tmid_diag_fifo);
         tmid_rx_idle_ticks = 0;
         tmid_rx_read_fifo(4u);
     }
+
     if (interrupt_bits & BK4819_REG_02_FSK_RX_FINISHED) {
-        tmid_diag_increment(&tmid_diag_finished);
-        gUpdateDisplay = true;
         if (tmid_rx_capturing) {
             tmid_rx_read_fifo(8u);
             tmid_rx_finish();
-        } else {
-            tmid_diag_bytes = 0;
-            tmid_diag_result = 'N';
         }
         tmid_rx_restart_capture();
     }
