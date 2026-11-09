@@ -308,29 +308,14 @@ bool MDC1200_process_rx_data(
 
 
 /* -------------------------------------------------------------------------
- * TMID codec and receive path.
- * 10 information bytes: version, six callsign chars, decimal SSID, CRC-16.
- * Rate-1/2 systematic convolutional FEC, K=7, parity polynomial 0x65.
- * The systematic and parity streams are packed MSB-first. CRC is checked
- * after Viterbi decoding, so corrected bits are validated before display.
+ * TMID raw packet codec and receive path.
+ *
+ * Stage 1 intentionally has no FEC: sync is acquired by the BK4819, then
+ * seven identity bytes (six callsign characters + one SSID digit) and a
+ * CRC-16/MODBUS are captured. FEC can be added after raw decoding is proven.
  * ------------------------------------------------------------------------- */
 char tmid_rx_callsign[7];
 uint8_t tmid_rx_ssid;
-
-#define TMID_INFO_BITS (TMID_DATA_BYTES * 8u)
-#define TMID_CODED_BITS TMID_CODE_BITS
-#define TMID_PARITY_OFFSET (TMID_STREAM_BYTES * 8u)
-#define TMID_POLY 0x65u
-#define TMID_METRIC_INF 0x3FFFu
-
-static uint8_t tmid_parity(uint8_t v)
-{
-    v &= TMID_POLY;
-    v ^= v >> 4;
-    v ^= v >> 2;
-    v ^= v >> 1;
-    return v & 1u;
-}
 
 static uint16_t tmid_crc16(const uint8_t *p, unsigned int n)
 {
@@ -344,102 +329,36 @@ static uint16_t tmid_crc16(const uint8_t *p, unsigned int n)
     return crc;
 }
 
-void TMID_EncodePayload(const uint8_t input[TMID_DATA_BYTES],
-                        uint8_t output[TMID_CODED_BYTES])
+void TMID_EncodePayload(const uint8_t input[TMID_ID_BYTES],
+                        uint8_t output[TMID_PACKET_BYTES])
 {
-    uint8_t state = 0;
-    memset(output, 0, TMID_CODED_BYTES);
-    for (unsigned int t = 0; t < TMID_CODE_BITS; ++t) {
-        const uint8_t bit = (t < TMID_INFO_BITS)
-                          ? ((input[t >> 3] >> (t & 7u)) & 1u) : 0u;
-        const uint8_t reg = (uint8_t)(((uint16_t)state << 1) | bit);
-        if (bit)
-            output[t >> 3] |= (uint8_t)(1u << (t & 7u));
-        if (tmid_parity(reg))
-            output[(TMID_PARITY_OFFSET + t) >> 3] |=
-                (uint8_t)(1u << ((TMID_PARITY_OFFSET + t) & 7u));
-        state = reg & 0x3Fu;
-    }
+    uint16_t crc;
+    memcpy(output, input, TMID_ID_BYTES);
+    crc = tmid_crc16(input, TMID_ID_BYTES);
+    output[7] = (uint8_t)crc;
+    output[8] = (uint8_t)(crc >> 8);
 }
 
-static bool TMID_DecodePayloadCore(const uint8_t input[TMID_CODED_BYTES],
-                                    uint8_t output[TMID_DATA_BYTES])
+static bool tmid_payload_valid(const uint8_t *p)
 {
-    uint16_t metric[64], next_metric[64];
-    uint8_t decisions[TMID_CODE_BITS][8];
-    for (unsigned int s = 0; s < 64u; ++s)
-        metric[s] = (s == 0u) ? 0u : TMID_METRIC_INF;
-    memset(decisions, 0, sizeof(decisions));
-
-    for (unsigned int t = 0; t < TMID_CODE_BITS; ++t) {
-        const uint8_t sys = (input[t >> 3] >> (t & 7u)) & 1u;
-        const unsigned int pt = TMID_PARITY_OFFSET + t;
-        const uint8_t par = (input[pt >> 3] >> (pt & 7u)) & 1u;
-        for (unsigned int ns = 0; ns < 64u; ++ns) {
-            const uint8_t bit = ns & 1u;
-            const unsigned int p0 = ns >> 1;
-            const unsigned int p1 = p0 | 0x20u;
-            const uint8_t reg0 = (uint8_t)((p0 << 1) | bit);
-            const uint8_t reg1 = (uint8_t)((p1 << 1) | bit);
-            const uint16_t cost0 = (uint16_t)((bit != sys) + (tmid_parity(reg0) != par));
-            const uint16_t cost1 = (uint16_t)((bit != sys) + (tmid_parity(reg1) != par));
-            const uint16_t m0 = (uint16_t)(metric[p0] + cost0);
-            const uint16_t m1 = (uint16_t)(metric[p1] + cost1);
-            if (m1 < m0) {
-                next_metric[ns] = m1;
-                decisions[t][ns >> 3] |= (uint8_t)(1u << (ns & 7u));
-            } else {
-                next_metric[ns] = m0;
-            }
-        }
-        memcpy(metric, next_metric, sizeof(metric));
-    }
-
-    /* Six appended zero bits force the encoder to the all-zero state. */
-    if (metric[0] >= TMID_METRIC_INF)
-        return false;
-    unsigned int state = 0u;
-    memset(output, 0, TMID_DATA_BYTES);
-    for (int t = (int)TMID_CODE_BITS - 1; t >= 0; --t) {
-        const uint8_t bit = state & 1u;
-        if ((unsigned int)t < TMID_INFO_BITS && bit)
-            output[(unsigned int)t >> 3] |=
-                (uint8_t)(1u << ((unsigned int)t & 7u));
-        {
-            const bool from_one = (decisions[t][state >> 3] &
-                                   (uint8_t)(1u << (state & 7u))) != 0;
-            state = (state >> 1) | (from_one ? 0x20u : 0u);
-        }
-    }
-
-    if (state != 0u || output[0] != 0x01u ||
-        tmid_crc16(output, 8u) !=
-            (uint16_t)(output[8] | ((uint16_t)output[9] << 8)) ||
-        output[7] < '0' || output[7] > '9')
+    bool padding = false;
+    if (tmid_crc16(p, TMID_ID_BYTES) !=
+        (uint16_t)(p[7] | ((uint16_t)p[8] << 8)))
         return false;
 
-    {
-        bool padding = false;
-        for (unsigned int i = 1; i < 7u; ++i) {
-            const char ch = (char)output[i];
-            if (ch == ' ') {
-                padding = true;
-                continue;
-            }
-            if (padding || !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')))
-                return false;
+    for (unsigned int i = 0; i < 6u; ++i) {
+        const char ch = (char)p[i];
+        if (ch == ' ') {
+            padding = true;
+            continue;
         }
+        if (padding || !((ch >= 'A' && ch <= 'Z') ||
+                         (ch >= '0' && ch <= '9')))
+            return false;
     }
-    return output[1] != ' ';
+    return p[0] != ' ' && p[6] >= '0' && p[6] <= '9';
 }
 
-/*
- * BK4819 FSK FIFO bit order is not consistent across the software transmit
- * convention and the raw receive register convention. Try both bit orders
- * and both polarities; the payload CRC and format checks in the core decoder
- * are the acceptance gate, so an alternate interpretation cannot create a
- * false callsign from a damaged frame.
- */
 static uint8_t tmid_reverse_bits(uint8_t value)
 {
     value = (uint8_t)(((value & 0x55u) << 1) | ((value >> 1) & 0x55u));
@@ -447,24 +366,27 @@ static uint8_t tmid_reverse_bits(uint8_t value)
     return (uint8_t)((value << 4) | (value >> 4));
 }
 
-bool TMID_DecodePayload(const uint8_t input[TMID_CODED_BYTES],
-                        uint8_t output[TMID_DATA_BYTES])
+/* Try both byte bit-orders and polarities; CRC + callsign validation gates acceptance. */
+bool TMID_DecodePayload(const uint8_t input[TMID_PACKET_BYTES],
+                        uint8_t output[TMID_ID_BYTES])
 {
-    uint8_t candidate[TMID_CODED_BYTES];
+    uint8_t candidate[TMID_PACKET_BYTES];
     for (unsigned int reverse = 0; reverse < 2u; ++reverse) {
         for (unsigned int invert = 0; invert < 2u; ++invert) {
-            for (unsigned int i = 0; i < TMID_CODED_BYTES; ++i) {
-                uint8_t value = reverse ? tmid_reverse_bits(input[i]) : input[i];
+            for (unsigned int i = 0; i < TMID_PACKET_BYTES; ++i) {
+                const uint8_t value = reverse ? tmid_reverse_bits(input[i]) : input[i];
                 candidate[i] = invert ? (uint8_t)~value : value;
             }
-            if (TMID_DecodePayloadCore(candidate, output))
+            if (tmid_payload_valid(candidate)) {
+                memcpy(output, candidate, TMID_ID_BYTES);
                 return true;
+            }
         }
     }
     return false;
 }
 
-static uint8_t tmid_rx_buffer[TMID_CODED_BYTES];
+static uint8_t tmid_rx_buffer[TMID_PACKET_BYTES];
 static uint8_t tmid_rx_count;
 static uint8_t tmid_rx_idle_ticks;
 static bool tmid_rx_armed;
@@ -472,7 +394,7 @@ static bool tmid_rx_capturing;
 static bool tmid_irq_mask_saved;
 static uint16_t tmid_saved_irq_mask;
 
-/* Small receive-stage counters exposed on the main screen while TMID is selected. */
+/* Receive-stage counters shown by the existing TMID debug display. */
 volatile uint8_t tmid_diag_sync;
 volatile uint8_t tmid_diag_fifo;
 volatile uint8_t tmid_diag_finished;
@@ -485,7 +407,6 @@ static void tmid_diag_increment(volatile uint8_t *value)
         ++*value;
 }
 
-
 static bool tmid_mode_selected(void)
 {
     return gEeprom.PTT_ID == PTT_ID_MODE_TMID_PRE ||
@@ -495,12 +416,6 @@ static bool tmid_mode_selected(void)
 
 static void tmid_rx_restart_capture(void)
 {
-    /*
-     * Restart only the FSK FIFO after a packet. Do not power-cycle the RX
-     * DSP, rewrite the interrupt mask, or clear REG_02 here: those actions
-     * can discard a pending squelch-lost event and leave normal squelch
-     * state out of step with the receiver.
-     */
     BK4819_WriteRegister(BK4819_REG_59, 0x4000u);
     BK4819_WriteRegister(BK4819_REG_59, 0x1000u);
     tmid_rx_count = 0;
@@ -514,24 +429,20 @@ static void tmid_rx_arm(void)
     tmid_diag_finished = 0;
     tmid_diag_bytes = 0;
     tmid_diag_result = '-';
-    /*
-     * Match the proven TA1JS UV-K5 APRS Bell-202 receiver configuration.
-     * TMID keeps its own A5 A5 sync, FEC and CRC. Configure the BK4819
-     * once; packet completion uses tmid_rx_restart_capture() so ordinary
-     * RF squelch detection is not reset between packets.
-     */
+
     BK4819_WriteRegister(BK4819_REG_02, 0u);
     BK4819_WriteRegister(BK4819_REG_3F, 0u);
     BK4819_RX_TurnOn();
 
+    /* 2200-Hz space / 1200-Hz mark FFSK receive pair. */
     BK4819_WriteRegister(BK4819_REG_70, 0x80E0u);
-    BK4819_WriteRegister(BK4819_REG_71, 18584u); /* 1800 Hz tone reference */
-    BK4819_WriteRegister(BK4819_REG_72, 0x3065u);
+    BK4819_WriteRegister(BK4819_REG_71, 22714u); /* 2200 Hz */
+    BK4819_WriteRegister(BK4819_REG_72, 0x3065u); /* 1200 Hz */
     BK4819_WriteRegister(BK4819_REG_58, 0x3FC3u);
     BK4819_WriteRegister(BK4819_REG_5A, 0xA5A5u);
     BK4819_WriteRegister(BK4819_REG_5C, 0xAA30u);
     BK4819_WriteRegister(BK4819_REG_5D,
-                         (uint16_t)((TMID_CODED_BYTES - 1u) << 8));
+                         (uint16_t)((TMID_PACKET_BYTES - 1u) << 8));
     BK4819_WriteRegister(BK4819_REG_5E, (64u << 3) | 4u);
 
     {
@@ -590,7 +501,6 @@ void TMID_RxTimeSlice10ms(void)
         return;
     }
 
-    /* Other radio setup paths can rewrite REG_3F after TMID is armed. */
     {
         const uint16_t required = BK4819_REG_3F_FSK_RX_SYNC |
                                  BK4819_REG_3F_FSK_RX_FINISHED |
@@ -607,7 +517,6 @@ void TMID_RxTimeSlice10ms(void)
     if (tmid_rx_idle_ticks < 150u)
         ++tmid_rx_idle_ticks;
     if (tmid_rx_idle_ticks >= 150u) {
-        /* Some BK4819 locks lose bit clock before RX_FINISHED is raised. */
         tmid_rx_read_fifo(8u);
         tmid_rx_finish();
         tmid_rx_restart_capture();
@@ -617,22 +526,22 @@ void TMID_RxTimeSlice10ms(void)
 
 static void tmid_rx_finish(void)
 {
-    uint8_t decoded[TMID_DATA_BYTES];
+    uint8_t decoded[TMID_ID_BYTES];
     bool valid = false;
     tmid_diag_bytes = tmid_rx_count;
 
-    if (tmid_rx_count == TMID_CODED_BYTES)
+    if (tmid_rx_count == TMID_PACKET_BYTES)
         valid = TMID_DecodePayload(tmid_rx_buffer, decoded);
 
     if (valid) {
         tmid_diag_result = 'G';
-        memcpy(tmid_rx_callsign, decoded + 1u, 6u);
+        memcpy(tmid_rx_callsign, decoded, 6u);
         tmid_rx_callsign[6] = '\0';
-        tmid_rx_ssid = (uint8_t)(decoded[7] - '0');
+        tmid_rx_ssid = (uint8_t)(decoded[6] - '0');
         mdc1200_rx_ready_tick_500ms = 10u;
         gUpdateDisplay = true;
     } else {
-        tmid_diag_result = (tmid_rx_count == TMID_CODED_BYTES) ? 'C' : 'L';
+        tmid_diag_result = (tmid_rx_count == TMID_PACKET_BYTES) ? 'C' : 'L';
     }
 
     tmid_rx_count = 0;
@@ -641,15 +550,10 @@ static void tmid_rx_finish(void)
 
 static void tmid_rx_read_fifo(uint8_t words)
 {
-    /*
-     * REG_5E low bits are the programmed almost-full threshold, not a
-     * live FIFO occupancy count. The proven BK4819 APRS path drains four
-     * words on FIFO_ALMOST_FULL and up to eight on RX_FINISHED.
-     */
-    while (words-- && tmid_rx_count < TMID_CODED_BYTES) {
+    while (words-- && tmid_rx_count < TMID_PACKET_BYTES) {
         const uint16_t word = BK4819_ReadRegister(BK4819_REG_5F);
         tmid_rx_buffer[tmid_rx_count++] = (uint8_t)word;
-        if (tmid_rx_count < TMID_CODED_BYTES)
+        if (tmid_rx_count < TMID_PACKET_BYTES)
             tmid_rx_buffer[tmid_rx_count++] = (uint8_t)(word >> 8);
     }
 }
@@ -681,7 +585,6 @@ void TMID_HandleRxInterrupts(uint16_t interrupt_bits)
             tmid_diag_bytes = 0;
             tmid_diag_result = 'N';
         }
-        /* Keep the RX/squelch DSP running; restart only the FSK capture. */
         tmid_rx_restart_capture();
     }
 }
