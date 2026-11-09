@@ -384,30 +384,30 @@ static bool tmid_decode_serial(const uint8_t *raw,
     for (unsigned int reverse = 0; reverse < 2u; ++reverse) {
         for (unsigned int invert = 0; invert < 2u; ++invert) {
             for (unsigned int offset = 0; offset < 7u; ++offset) {
-            bool framing_ok = true;
-            unsigned int bit = offset;
+                bool framing_ok = true;
+                unsigned int bit = offset;
 
-            for (unsigned int octet = 0; octet < TMID_PACKET_BYTES; ++octet) {
-                uint8_t value = 0;
-                if ((tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 0u) {
-                    framing_ok = false; /* start bit must be space / 0 */
-                    break;
+                for (unsigned int octet = 0; octet < TMID_PACKET_BYTES; ++octet) {
+                    uint8_t value = 0;
+                    if ((tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 0u) {
+                        framing_ok = false; /* start bit must be space / 0 */
+                        break;
+                    }
+                    for (unsigned int data_bit = 0; data_bit < 8u; ++data_bit) {
+                        const uint8_t data = tmid_get_raw_bit(raw, bit++, reverse) ^ invert;
+                        value |= (uint8_t)(data << data_bit);
+                    }
+                    if ((tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 1u) {
+                        framing_ok = false; /* stop bit must be mark / 1 */
+                        break;
+                    }
+                    packet[octet] = value;
                 }
-                for (unsigned int data_bit = 0; data_bit < 8u; ++data_bit) {
-                    const uint8_t data = tmid_get_raw_bit(raw, bit++, reverse) ^ invert;
-                    value |= (uint8_t)(data << data_bit);
-                }
-                if ((tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 1u) {
-                    framing_ok = false; /* stop bit must be mark / 1 */
-                    break;
-                }
-                packet[octet] = value;
-            }
 
-            if (framing_ok && tmid_payload_valid(packet)) {
-                memcpy(output, packet, TMID_ID_BYTES);
-                return true;
-            }
+                if (framing_ok && tmid_payload_valid(packet)) {
+                    memcpy(output, packet, TMID_ID_BYTES);
+                    return true;
+                }
             }
         }
     }
