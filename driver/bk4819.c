@@ -474,11 +474,6 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
     for (unsigned int i = sizeof(sync); i < sizeof(frame); ++i)
         BEACON_SEND_UART_BYTE(frame[i], i + 1u < sizeof(frame));
 
-    /* Retain the separate 1975-Hz, 33-symbol end marker. */
-    BK4819_WriteRegister(BK4819_REG_71, scale_freq(1975u));
-    for (unsigned int p = 0; p < 33u; ++p)
-        BEACON_WAIT_SYMBOL();
-
 #undef BEACON_SEND_UART_BYTE
 #undef BEACON_SEND_RAW_BYTE
 #undef BEACON_SEND_SYMBOL
