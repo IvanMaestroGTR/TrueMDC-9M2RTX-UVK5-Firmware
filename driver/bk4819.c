@@ -430,16 +430,22 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
         } \
         BEACON_WAIT_SYMBOL(); \
     } while (0)
-#define BEACON_SEND_BYTE(v) do { \
+#define BEACON_SEND_RAW_BYTE(v) do { \
         const uint8_t byte_ = (uint8_t)(v); \
         for (unsigned int bit_ = 0; bit_ < 8u; ++bit_) \
             BEACON_SEND_SYMBOL((byte_ >> bit_) & 1u); \
     } while (0)
+#define BEACON_SEND_UART_BYTE(v) do { \
+        const uint8_t byte_ = (uint8_t)(v); \
+        BEACON_SEND_SYMBOL(0u); /* start bit: space */ \
+        for (unsigned int bit_ = 0; bit_ < 8u; ++bit_) \
+            BEACON_SEND_SYMBOL((byte_ >> bit_) & 1u); \
+        BEACON_SEND_SYMBOL(1u); /* post/stop bit: mark */ \
+    } while (0)
 
     /*
-     * Keep the established warble exactly: 33 space symbols then 20 mark
-     * symbols per extended cycle; the short form remains 20 then 33.
-     * Only the space frequency changes from 1800 to the requested 2200 Hz.
+     * Retain the established warble cadence and configured duration.
+     * The signalling pair is now consistently 1200-Hz mark / 2200-Hz space.
      */
     tone_mark = 2u;
     if (with_preamble && gEeprom.MDC1200_PREAMBLE_DURATION > 1u) {
@@ -452,15 +458,21 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
         for (unsigned int p = 0; p < 33u; ++p) BEACON_SEND_SYMBOL(1u);
     }
 
-    for (unsigned int i = 0; i < sizeof(frame); ++i)
-        BEACON_SEND_BYTE(frame[i]);
+    /* Sync is a raw 16-bit word so the receiver can acquire packet boundary. */
+    for (unsigned int i = 0; i < sizeof(sync); ++i)
+        BEACON_SEND_RAW_BYTE(sync[i]);
+
+    /* Every following octet has an explicit start bit and one post/stop bit. */
+    for (unsigned int i = sizeof(sync); i < sizeof(frame); ++i)
+        BEACON_SEND_UART_BYTE(frame[i]);
 
     /* Retain the separate 1975-Hz, 33-symbol end marker. */
     BK4819_WriteRegister(BK4819_REG_71, scale_freq(1975u));
     for (unsigned int p = 0; p < 33u; ++p)
         BEACON_WAIT_SYMBOL();
 
-#undef BEACON_SEND_BYTE
+#undef BEACON_SEND_UART_BYTE
+#undef BEACON_SEND_RAW_BYTE
 #undef BEACON_SEND_SYMBOL
 #undef BEACON_WAIT_SYMBOL
 
