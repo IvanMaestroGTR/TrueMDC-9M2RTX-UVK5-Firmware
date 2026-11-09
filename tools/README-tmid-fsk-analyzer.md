@@ -1,26 +1,28 @@
-# TMID / Multi-pair FSK Analyzer
+# TMID / FSK Bit & Preamble Analyzer
 
-A small desktop WAV analyzer for debugging the audio-side TMID FSK signal. It uses only the Python standard library and Tkinter (normally included with desktop Python installations).
+A small desktop WAV analyzer for investigating TMID FSK audio and the warble preamble. Python 3 + Tkinter; no third-party packages are required.
 
 ## Run
 
 ```bash
-python tmid_fsk_analyzer.py
+py tools/tmid_fsk_analyzer.py
 ```
 
-On Windows, use `py tmid_fsk_analyzer.py`.
+## Signal settings
 
-## Features
+- **Frequency mode: Manual** — enter separate **Mark (Hz)** and **Space (Hz)** values.
+- **Frequency mode: Auto** — estimates the two strongest separated tones in the beginning of the recording. Check the detected values; auto mode can be confused by silence, speech, noise, or a recording that starts before the FSK signal.
+- Set baud rate (default 1200), start offset, analysis window, and bit polarity.
+- Start offset 0 ms analyzes from the beginning of the WAV, so include the warble in the recording if you want to inspect it.
 
-- Load PCM WAV recordings (8/16/24/32-bit, mono or stereo).
-- Analyze multiple mark/space pairs in one pass. Defaults include TMID 1200/2200 Hz and MDC 1200/1800 Hz.
-- Configure baud rate, initial bit offset, analysis-window width, and mark/space bit polarity.
-- Inspect every bit decision, timestamp, selected tone, confidence, and per-tone score.
-- View raw LSB-first bytes, UART framing candidates, ASCII, and a TMID payload hypothesis (6 ASCII callsign bytes + 1 ASCII SSID byte + little-endian CRC-16/MODBUS).
-- Export bit decisions to CSV.
+## Preamble / warble inspection
 
-## Important limitation
+The report includes the chronological bit stream and a run-length view such as `0:3 1:3 0:3 1:3`, plus run lengths alone. This makes alternating warble patterns visible instead of only presenting the reconstructed packet bytes.
 
-This analyzes a recorded audio waveform. It does **not** model BK4819 FSK register configuration, hardware sync recognition, FIFO packing/bit order, interrupt timing, or RF demodulation. Use it to establish whether the captured audio contains a stable and CRC-valid TMID packet, then compare that result with the bytes delivered by the radio's RX FIFO.
+## Exporting a log for review
 
-The first version uses a fixed symbol clock and user-adjustable start offset; it does not perform automatic clock recovery. Sweep the offset in small steps when diagnosing bit alignment.
+After analyzing a recording, click **Export FULL LOG (.txt)…** and send the resulting TXT file with the original WAV. The log contains WAV metadata, selected frequencies, baud/timing settings, every detected symbol and confidence score, the full bit stream, run-length sequence, raw LSB-first bytes, and UART/CRC hypotheses. **Export bit CSV…** is also available for spreadsheet inspection.
+
+## Limitations
+
+This is an audio-side analyzer. It does not emulate BK4819 sync detection, FIFO packing/bit order, interrupt timing, or the radio's internal demodulator. The first version uses a fixed symbol clock and a user-set start offset; it does not yet recover timing automatically. A CRC failure alone does not prove that the transmitted packet is malformed.
