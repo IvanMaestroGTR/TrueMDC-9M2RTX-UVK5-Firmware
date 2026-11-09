@@ -458,6 +458,14 @@ void BK4819_SendTMIDBeacon(const bool with_preamble)
         for (unsigned int p = 0; p < 33u; ++p) BEACON_SEND_SYMBOL(1u);
     }
 
+    /*
+     * The BK4819 FSK receiver requires at least one alternating preamble byte
+     * before it will assert RX_SYNC. REG_59 preamble length = 0 selects one
+     * byte; with sync byte 0 = 0xA5, use 0x55 immediately before the sync.
+     * Keep the audible/visible warble above, then add this hardware preamble.
+     */
+    BEACON_SEND_RAW_BYTE(0x55u);
+
     /* Sync is a raw 16-bit word so the receiver can acquire packet boundary. */
     for (unsigned int i = 0; i < sizeof(sync); ++i)
         BEACON_SEND_RAW_BYTE(sync[i]);
