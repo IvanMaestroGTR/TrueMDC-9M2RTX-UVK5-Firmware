@@ -397,7 +397,10 @@ static bool tmid_decode_serial(const uint8_t *raw,
                         const uint8_t data = tmid_get_raw_bit(raw, bit++, reverse) ^ invert;
                         value |= (uint8_t)(data << data_bit);
                     }
-                    if ((tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 1u) {
+                    /* All octets except the final CRC byte carry a stop bit.
+                     * The transmitter intentionally omits the final post bit. */
+                    if (octet + 1u < TMID_PACKET_BYTES &&
+                        (tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 1u) {
                         framing_ok = false; /* stop bit must be mark / 1 */
                         break;
                     }
