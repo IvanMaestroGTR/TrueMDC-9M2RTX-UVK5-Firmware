@@ -117,6 +117,7 @@ void MDC1200_init(void);
 /* TMID stage-1 raw one-way callsign packet; no FEC until basic RX works. */
 #define TMID_ID_BYTES 7u       /* six callsign characters + one ASCII SSID digit */
 #define TMID_PACKET_BYTES 9u   /* identity bytes + CRC-16/MODBUS */
+#define TMID_SERIAL_BYTES 12u  /* 9 UART frames: 10 bits each, packed into 12 bytes */
 void TMID_EncodePayload(const uint8_t input[TMID_ID_BYTES], uint8_t output[TMID_PACKET_BYTES]);
 bool TMID_DecodePayload(const uint8_t input[TMID_PACKET_BYTES], uint8_t output[TMID_ID_BYTES]);
 void TMID_RxService(void);
@@ -124,11 +125,6 @@ void TMID_RxTimeSlice10ms(void);
 void TMID_HandleRxInterrupts(uint16_t interrupt_bits);
 extern char tmid_rx_callsign[7];
 extern uint8_t tmid_rx_ssid;
-extern volatile uint8_t tmid_diag_sync;
-extern volatile uint8_t tmid_diag_fifo;
-extern volatile uint8_t tmid_diag_finished;
-extern volatile uint8_t tmid_diag_bytes;
-extern volatile char tmid_diag_result;
 
 
 uint16_t extractHex(const char *str);
