@@ -7,7 +7,7 @@
 /* FleetSync II ANI is one 64-bit block after the 32-bit sync word. */
 #define FLEETSYNC_PACKET_SIZE 12u
 
-/* FleetSync carries a 12-bit unit offset from the displayed value 999. */
+/* Wire IDs use Fleet = displayed ID - 99 and Unit = displayed ID - 999. */
 #define FLEETSYNC_FLEET_MIN 100u
 #define FLEETSYNC_FLEET_MAX 349u
 #define FLEETSYNC_UNIT_MIN  1000u
