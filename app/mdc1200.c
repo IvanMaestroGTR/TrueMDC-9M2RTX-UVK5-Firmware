@@ -363,9 +363,11 @@ static bool tmid_payload_valid(const uint8_t *p)
     return p[0] != ' ' && p[6] >= '0' && p[6] <= '9';
 }
 
-static uint8_t tmid_get_raw_bit(const uint8_t *raw, unsigned int bit)
+static uint8_t tmid_get_raw_bit(const uint8_t *raw, unsigned int bit,
+                                unsigned int reverse)
 {
-    return (uint8_t)((raw[bit >> 3] >> (bit & 7u)) & 1u);
+    const unsigned int shift = reverse ? (7u - (bit & 7u)) : (bit & 7u);
+    return (uint8_t)((raw[bit >> 3] >> shift) & 1u);
 }
 
 /*
@@ -379,22 +381,23 @@ static bool tmid_decode_serial(const uint8_t *raw,
 {
     uint8_t packet[TMID_PACKET_BYTES];
 
-    for (unsigned int invert = 0; invert < 2u; ++invert) {
-        for (unsigned int offset = 0; offset < 7u; ++offset) {
+    for (unsigned int reverse = 0; reverse < 2u; ++reverse) {
+        for (unsigned int invert = 0; invert < 2u; ++invert) {
+            for (unsigned int offset = 0; offset < 7u; ++offset) {
             bool framing_ok = true;
             unsigned int bit = offset;
 
             for (unsigned int octet = 0; octet < TMID_PACKET_BYTES; ++octet) {
                 uint8_t value = 0;
-                if ((tmid_get_raw_bit(raw, bit++) ^ invert) != 0u) {
+                if ((tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 0u) {
                     framing_ok = false; /* start bit must be space / 0 */
                     break;
                 }
                 for (unsigned int data_bit = 0; data_bit < 8u; ++data_bit) {
-                    const uint8_t data = tmid_get_raw_bit(raw, bit++) ^ invert;
+                    const uint8_t data = tmid_get_raw_bit(raw, bit++, reverse) ^ invert;
                     value |= (uint8_t)(data << data_bit);
                 }
-                if ((tmid_get_raw_bit(raw, bit++) ^ invert) != 1u) {
+                if ((tmid_get_raw_bit(raw, bit++, reverse) ^ invert) != 1u) {
                     framing_ok = false; /* stop bit must be mark / 1 */
                     break;
                 }
@@ -404,6 +407,7 @@ static bool tmid_decode_serial(const uint8_t *raw,
             if (framing_ok && tmid_payload_valid(packet)) {
                 memcpy(output, packet, TMID_ID_BYTES);
                 return true;
+            }
             }
         }
     }
