@@ -119,7 +119,6 @@ void MDC1200_init(void);
 #define TMID_PACKET_BYTES 9u   /* identity bytes + CRC-16/MODBUS */
 #define TMID_SERIAL_BYTES 12u  /* 9 UART frames: 10 bits each, packed into 12 bytes */
 void TMID_EncodePayload(const uint8_t input[TMID_ID_BYTES], uint8_t output[TMID_PACKET_BYTES]);
-bool TMID_DecodePayload(const uint8_t input[TMID_PACKET_BYTES], uint8_t output[TMID_ID_BYTES]);
 void TMID_RxService(void);
 void TMID_RxTimeSlice10ms(void);
 void TMID_HandleRxInterrupts(uint16_t interrupt_bits);
