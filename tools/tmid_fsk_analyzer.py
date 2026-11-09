@@ -108,7 +108,14 @@ class App(tk.Tk):
         self.summary=ttk.Label(self,text="Load a WAV file. Warble/preamble is analyzed from the selected start offset.",padding=8);self.summary.pack(fill="x")
         split=ttk.Panedwindow(self,orient="vertical");split.pack(fill="both",expand=True,padx=8,pady=4)
         top=ttk.Frame(split);bottom=ttk.Frame(split);split.add(top,weight=2);split.add(bottom,weight=3)
-        self.canvas=tk.Canvas(top,bg="#101820",height=210,highlightthickness=0);self.canvas.pack(fill="both",expand=True)
+        wave_frame=ttk.Frame(top);wave_frame.pack(fill="both",expand=True)
+        ttk.Label(wave_frame,text="PCM waveform (full recording)").pack(anchor="w")
+        self.wave_canvas=tk.Canvas(wave_frame,bg="#101820",height=145,highlightthickness=0)
+        self.wave_canvas.pack(fill="both",expand=True)
+        ttk.Label(wave_frame,text="Bit decisions").pack(anchor="w")
+        self.bit_canvas=tk.Canvas(wave_frame,bg="#101820",height=125,highlightthickness=0)
+        self.bit_canvas.pack(fill="both",expand=True)
+        self.wave_canvas.bind("<Configure>",self._redraw_waveform)
         cols=("idx","ms","tone","bit","confidence","mark","space")
         self.table=ttk.Treeview(bottom,columns=cols,show="headings",height=10)
         for c,h,w in zip(cols,("Symbol","Time ms","Detected Hz","Bit","Confidence","Mark score","Space score"),(65,95,110,50,90,100,100)):
@@ -152,19 +159,51 @@ class App(tk.Tk):
         self.rows=rows;self.results={"mark":mark,"space":space,"baud":baud,"offset_ms":offset*1000,"window_pct":pct*100,"bits":bits}
         self.table.delete(*self.table.get_children())
         for r in rows:self.table.insert("","end",values=(r[0],f"{r[1]:.3f}",f"{r[2]:.1f}",r[3],f"{r[4]:.3f}",f"{r[5]:.3f}",f"{r[6]:.3f}"))
-        self.draw(rows,mark,space);self.make_report()
+        self.draw_waveform();self.draw(rows,mark,space);self.make_report()
         avg=sum(r[4] for r in rows)/max(1,len(rows))
         self.summary.config(text=f"{len(rows)} symbols | Mark {mark:g} Hz / Space {space:g} Hz | {baud:g} baud | mean confidence {avg:.3f} | preamble runs shown in log")
 
+    def _redraw_waveform(self,event=None):
+        if self.samples is not None:self.draw_waveform()
+
+    def draw_waveform(self):
+        c=self.wave_canvas;c.delete("all")
+        w=max(1,c.winfo_width());h=max(1,c.winfo_height())
+        if not self.samples:return
+        left,right,top,bottom=48,w-12,12,h-25
+        plot_w=max(1,right-left);plot_h=max(1,bottom-top)
+        mid=top+plot_h/2
+        # Horizontal amplitude grid and labels.
+        for amp in (-1.0,-0.5,0.0,0.5,1.0):
+            y=mid-amp*(plot_h/2)
+            c.create_line(left,y,right,y,fill="#344552" if amp else "#718392",dash=(2,3) if amp else ())
+            c.create_text(left-7,y,text=f"{amp:g}",anchor="e",fill="#c6d0d8",font=("TkDefaultFont",8))
+        # Min/max decimation keeps narrow pulses visible without drawing every PCM sample.
+        total=len(self.samples)
+        for px in range(plot_w):
+            a=int(px*total/plot_w);b=max(a+1,int((px+1)*total/plot_w))
+            chunk=self.samples[a:min(total,b)]
+            if not chunk:continue
+            lo=min(chunk);hi=max(chunk)
+            y1=mid-hi*(plot_h/2);y2=mid-lo*(plot_h/2)
+            x=left+px
+            c.create_line(x,y1,x,y2,fill="#40d6a2",width=1)
+        duration=total/self.rate
+        for tick in range(6):
+            x=left+plot_w*tick/5
+            c.create_line(x,top,x,bottom,fill="#263641",dash=(2,4))
+            c.create_text(x,bottom+4,text=f"{duration*tick/5*1000:.0f} ms",anchor="n",fill="#c6d0d8",font=("TkDefaultFont",8))
+        c.create_text(5,3,anchor="nw",fill="white",text=f"Amplitude | {duration*1000:.1f} ms total")
+
     def draw(self,rows,mark,space):
-        self.canvas.delete("all");w=max(1,self.canvas.winfo_width());h=max(1,self.canvas.winfo_height())
+        self.bit_canvas.delete("all");w=max(1,self.bit_canvas.winfo_width());h=max(1,self.bit_canvas.winfo_height())
         if not rows:return
-        self.canvas.create_text(10,8,anchor="nw",fill="white",text="Symbol decisions from selected start offset (includes warble if offset starts at recording beginning)")
+        self.bit_canvas.create_text(10,8,anchor="nw",fill="white",text="Symbol decisions from selected start offset (includes warble if offset starts at recording beginning)")
         step=max(1,(w-30)/len(rows));top=30;usable=h-55
         for r in rows:
             x=15+r[0]*step;y=top if r[3]==0 else top+usable*.55;color="#40d6a2" if r[3]==0 else "#ffb454"
-            self.canvas.create_rectangle(x,y,x+max(1,step-1),y+usable*.38,fill=color,outline="")
-            if step>12:self.canvas.create_text(x+step/2,y+usable*.19,text=str(r[3]),fill="#101820")
+            self.bit_canvas.create_rectangle(x,y,x+max(1,step-1),y+usable*.38,fill=color,outline="")
+            if step>12:self.bit_canvas.create_text(x+step/2,y+usable*.19,text=str(r[3]),fill="#101820")
 
     def make_report(self):
         z=self.results;bits=z["bits"];rr=runs(bits);avg=sum(r[4] for r in self.rows)/max(1,len(self.rows))
