@@ -53,9 +53,10 @@ static bool FleetSync_validate_block(const uint8_t *block, uint16_t *fleet, uint
     if (FleetSync_even_parity(block, 8) != 0)
         return false;
 
-    *fleet = (uint16_t)block[2] + FLEETSYNC_FLEET_MIN;
+    /* FleetSync wire values are offset from displayed IDs by 99 and 999. */
+    *fleet = (uint16_t)block[2] + (FLEETSYNC_FLEET_MIN - 1u);
     *unit = (uint16_t)(((uint16_t)block[3] << 4) | ((uint16_t)block[4] >> 4)) +
-            FLEETSYNC_UNIT_MIN;
+            (FLEETSYNC_UNIT_MIN - 1u);
 
     return *fleet <= FLEETSYNC_FLEET_MAX && *unit <= FLEETSYNC_UNIT_MAX;
 }
@@ -157,8 +158,9 @@ unsigned int FleetSync_encode_ani(void *data, uint16_t fleet, uint16_t unit,
 {
     uint8_t *packet = data;
     uint8_t *block = packet + sizeof(fleetsync_sync);
-    uint16_t fleet_raw = fleet - FLEETSYNC_FLEET_MIN;
-    uint16_t unit_raw = unit - FLEETSYNC_UNIT_MIN;
+    /* Match the FleetSync reference: displayed ID = wire value + 99/999. */
+    uint16_t fleet_raw = fleet - (FLEETSYNC_FLEET_MIN - 1u);
+    uint16_t unit_raw = unit - (FLEETSYNC_UNIT_MIN - 1u);
     uint16_t crc;
 
     /* Callers normally validate these.  Clamping also makes this safe alone. */
