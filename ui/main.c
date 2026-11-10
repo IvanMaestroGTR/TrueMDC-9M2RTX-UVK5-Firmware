@@ -931,28 +931,24 @@ void UI_DisplayMain(void) {
             gTalkPermitToast != TALK_PERMIT_TOAST_CALL_ENDED) {
             char mdc1200_contact[15];
             center_line = CENTER_LINE_MDC1200;
-            if (mdc1200_contact_find(mdc1200_unit_id, mdc1200_contact)) {
-                snprintf(String, sizeof(String), "ID: %.14s", mdc1200_contact);
 #ifdef ENABLE_FLEETSYNC
-            } else if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
-                       gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
-                       gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_BOTH) {
+            const bool is_fleetsync =
+                gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
+                gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
+                gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_BOTH;
+            if (is_fleetsync) {
                 if (fleetsync_contact_find(mdc1200_fleet_id, mdc1200_unit_id, mdc1200_contact))
                     snprintf(String, sizeof(String), "ID: %.14s", mdc1200_contact);
                 else
                     snprintf(String, sizeof(String), "ID: %03u%04u",
                              mdc1200_fleet_id, mdc1200_unit_id);
+            } else
 #endif
-            } else {
-#ifdef ENABLE_FLEETSYNC
-                if (gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_PRE ||
-                    gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_POST ||
-                    gEeprom.PTT_ID == PTT_ID_MODE_FLEETSYNC_BOTH)
-                    snprintf(String, sizeof(String), "ID: %03u%04u",
-                             mdc1200_fleet_id, mdc1200_unit_id);
+            {
+                if (mdc1200_contact_find(mdc1200_unit_id, mdc1200_contact))
+                    snprintf(String, sizeof(String), "ID: %.14s", mdc1200_contact);
                 else
-#endif
-                snprintf(String, sizeof(String), "ID: %04X", mdc1200_unit_id);
+                    snprintf(String, sizeof(String), "ID: %04X", mdc1200_unit_id);
             }
 
             UI_PrintStringSmall(String, 2, 0, 3);
