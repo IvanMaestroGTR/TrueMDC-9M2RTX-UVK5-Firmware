@@ -488,12 +488,19 @@ void AUDIO_PlayRxAlert(void)
 {
     AUDIO_AudioPathOn();
     SYSTEM_DelayMs(2);
+
     BK4819_PlayTone(785, true);
     SYSTEM_DelayMs(40);
+    BK4819_ExitTxMute();
+
     BK4819_PlayTone(1174, true);
     SYSTEM_DelayMs(40);
+    BK4819_ExitTxMute();
+
     BK4819_PlayTone(990, true);
     SYSTEM_DelayMs(40);
+    BK4819_ExitTxMute();
+
     BK4819_PlayTone(1174, true);
     SYSTEM_DelayMs(40);
     BK4819_ExitTxMute();
