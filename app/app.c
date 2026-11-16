@@ -85,6 +85,8 @@
 #include "ui/menu.h"
 #include "ui/status.h"
 #include "ui/ui.h"
+static bool gRxAlertPlayed = false;
+
 
 static bool gRxEndTonePending;
 // A received signal on dual watch must return to alternating VFOs before its
