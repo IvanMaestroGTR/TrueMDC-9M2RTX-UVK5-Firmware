@@ -491,17 +491,12 @@ void AUDIO_PlayRxAlert(void)
 
     BK4819_PlayTone(785, true);
     SYSTEM_DelayMs(40);
-    BK4819_ExitTxMute();
-
-    BK4819_PlayTone(1174, true);
+    BK4819_SetToneFrequency(1174);
     SYSTEM_DelayMs(40);
-    BK4819_ExitTxMute();
-
-    BK4819_PlayTone(990, true);
+    BK4819_SetToneFrequency(990);
     SYSTEM_DelayMs(40);
-    BK4819_ExitTxMute();
-
-    BK4819_PlayTone(1174, true);
+    BK4819_SetToneFrequency(1174);
     SYSTEM_DelayMs(40);
-    BK4819_ExitTxMute();
+
+    BK4819_TurnsOffTonesTurnsOnRX();
 }
