@@ -491,12 +491,12 @@ void AUDIO_PlayRxAlert(void)
 
     BK4819_PlayTone(785, true);
     SYSTEM_DelayMs(40);
-    BK4819_SetToneFrequency(1174);
+    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(1174 * 10.32444));
     SYSTEM_DelayMs(40);
-    BK4819_SetToneFrequency(990);
+    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(990 * 10.32444));
     SYSTEM_DelayMs(40);
-    BK4819_SetToneFrequency(1174);
+    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(1174 * 10.32444));
     SYSTEM_DelayMs(40);
 
-    BK4819_TurnsOffTones_TurnsOnRX();
+    BK4819_TurnsOffTonesTurnsOnRX();
 }
