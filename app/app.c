@@ -85,7 +85,6 @@
 #include "ui/menu.h"
 #include "ui/status.h"
 #include "ui/ui.h"
-static bool gRxAlertPlayed = false;
 
 
 static bool gRxEndTonePending;
@@ -126,7 +125,7 @@ static void CheckForIncoming(void) {
     // squelch is open
     if (!gRxTalkPermitPlayed) {
         gRxTalkPermitPlayed = true;
-        BK4819_MarkTalkPermitToneRx();
+        AUDIO_PlayRxAlert();
     }
 
     if (gScanStateDir == SCAN_OFF) {    // not RF scanning
