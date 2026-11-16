@@ -36,6 +36,7 @@
 
 
 BEEP_Type_t gBeepToPlay = BEEP_NONE;
+static bool gRxAlertPlaying = false;
 
 void AUDIO_PlayBeep(BEEP_Type_t Beep) {
 
@@ -484,12 +485,26 @@ void AUDIO_PlayQueuedVoice(void)
 }
 
 #endif
+
 void AUDIO_PlayRxAlert(void)
 {
-    static const uint16_t frequencies[] = {785, 1174, 990, 1174};
-    static const uint16_t durations[] = {40, 40, 40, 40};
+    if (gRxAlertPlaying)
+        return;
 
-    // Play the alert as a finite tone sequence so each segment is explicitly
-    // unmuted/muted and the radio is returned to RX after the final segment.
-    BK4819_PlayToneSequence(frequencies, durations, ARRAY_SIZE(frequencies), 28);
+    gRxAlertPlaying = true;
+
+    AUDIO_AudioPathOn();
+    SYSTEM_DelayMs(2);
+
+    BK4819_PlayTone(785, true);
+    SYSTEM_DelayMs(40);
+    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(1174 * 10.32444));
+    SYSTEM_DelayMs(40);
+    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(990 * 10.32444));
+    SYSTEM_DelayMs(40);
+    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(1174 * 10.32444));
+    SYSTEM_DelayMs(40);
+
+    BK4819_TurnsOffTones_TurnsOnRX();
+    gRxAlertPlaying = false;
 }
