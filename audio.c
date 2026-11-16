@@ -498,5 +498,5 @@ void AUDIO_PlayRxAlert(void)
     BK4819_SetToneFrequency(1174);
     SYSTEM_DelayMs(40);
 
-    BK4819_TurnsOffTonesTurnsOnRX();
+    BK4819_TurnsOffTones_TurnsOnRX();
 }
