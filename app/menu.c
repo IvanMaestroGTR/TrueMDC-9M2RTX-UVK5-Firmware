@@ -1353,7 +1353,7 @@ static void MENU_Key_0_to_9(KEY_Code_t Key, bool bKeyPressed, bool bKeyHeld) {
     uint8_t now_menu = UI_MENU_GetCurrentMenuId();
 #ifdef ENABLE_MDC1200_EDIT //���뷨����
     uint8_t end_index = now_menu == MENU_MEM_NAME ? MAX_EDIT_INDEX :
-                        now_menu == MENU_FLEETSYNC_UNIT ? 8 : 4;
+                        4;
 #else
     uint8_t end_index = MAX_EDIT_INDEX;
 #endif
