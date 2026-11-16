@@ -9,7 +9,7 @@
  *
  *     Unless required by applicable law or agreed to in writing, software
  *     distributed under the License is distributed on an "AS IS" BASIS,
- *     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *     See the License for the specific language governing permissions and
  *     limitations under the License.
  */
@@ -283,7 +283,7 @@ void AUDIO_PlaySingleVoice(bool bFlag)
     if (gEeprom.VOICE_PROMPT != VOICE_PROMPT_OFF && gVoiceWriteIndex > 0)
     {
         if (gEeprom.VOICE_PROMPT == VOICE_PROMPT_CHINESE)
-        {	// Chinese
+        {
             if (VoiceID >= ARRAY_SIZE(VoiceClipLengthChinese))
                 goto Bailout;
 
@@ -291,7 +291,7 @@ void AUDIO_PlaySingleVoice(bool bFlag)
             VoiceID += VOICE_ID_CHI_BASE;
         }
         else
-        {	// English
+        {
             if (VoiceID >= ARRAY_SIZE(VoiceClipLengthEnglish))
                 goto Bailout;
 
@@ -299,18 +299,18 @@ void AUDIO_PlaySingleVoice(bool bFlag)
             VoiceID += VOICE_ID_ENG_BASE;
         }
 
-        if (FUNCTION_IsRx())   // 1of11
+        if (FUNCTION_IsRx())
             BK4819_SetAF(BK4819_AF_MUTE);
 
 #ifdef ENABLE_FMRADIO
-            if (gFmRadioMode)
-                BK1080_Mute(true);
+        if (gFmRadioMode)
+            BK1080_Mute(true);
 #endif
 
         AUDIO_AudioPathOn();
 
 #ifdef ENABLE_VOX
-            gVoxResumeCountdown = 2000;
+        gVoxResumeCountdown = 2000;
 #endif
 
         SYSTEM_DelayMs(5);
@@ -323,12 +323,12 @@ void AUDIO_PlaySingleVoice(bool bFlag)
         {
             SYSTEM_DelayMs(Delay * 10);
 
-            if (FUNCTION_IsRx())	// 1of11
+            if (FUNCTION_IsRx())
                 RADIO_SetModulation(gRxVfo->Modulation);
 
 #ifdef ENABLE_FMRADIO
-                if (gFmRadioMode)
-                    BK1080_Mute(false);
+            if (gFmRadioMode)
+                BK1080_Mute(false);
 #endif
 
             if (!gEnableSpeaker)
@@ -338,7 +338,7 @@ void AUDIO_PlaySingleVoice(bool bFlag)
             gVoiceReadIndex     = 0;
 
 #ifdef ENABLE_VOX
-                gVoxResumeCountdown = 80;
+            gVoxResumeCountdown = 80;
 #endif
 
             return;
@@ -455,7 +455,7 @@ void AUDIO_PlayQueuedVoice(void)
             gFlagPlayQueuedVoice           = false;
 
 #ifdef ENABLE_VOX
-                gVoxResumeCountdown = 2000;
+            gVoxResumeCountdown = 2000;
 #endif
 
             return;
@@ -464,19 +464,19 @@ void AUDIO_PlayQueuedVoice(void)
 
     if (FUNCTION_IsRx())
     {
-        RADIO_SetModulation(gRxVfo->Modulation); // 1of11
+        RADIO_SetModulation(gRxVfo->Modulation);
     }
 
 #ifdef ENABLE_FMRADIO
-        if (gFmRadioMode)
-            BK1080_Mute(false);
+    if (gFmRadioMode)
+        BK1080_Mute(false);
 #endif
 
     if (!gEnableSpeaker)
         AUDIO_AudioPathOff();
 
 #ifdef ENABLE_VOX
-        gVoxResumeCountdown = 80;
+    gVoxResumeCountdown = 80;
 #endif
 
     gVoiceWriteIndex    = 0;
@@ -486,17 +486,10 @@ void AUDIO_PlayQueuedVoice(void)
 #endif
 void AUDIO_PlayRxAlert(void)
 {
-    AUDIO_AudioPathOn();
-    SYSTEM_DelayMs(2);
+    static const uint16_t frequencies[] = {785, 1174, 990, 1174};
+    static const uint16_t durations[] = {40, 40, 40, 40};
 
-    BK4819_PlayTone(785, true);
-    SYSTEM_DelayMs(40);
-    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(1174 * 10.32444));
-    SYSTEM_DelayMs(40);
-    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(990 * 10.32444));
-    SYSTEM_DelayMs(40);
-    BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(1174 * 10.32444));
-    SYSTEM_DelayMs(40);
-
-    BK4819_TurnsOffTones_TurnsOnRX();
+    // Play the alert as a finite tone sequence so each segment is explicitly
+    // unmuted/muted and the radio is returned to RX after the final segment.
+    BK4819_PlayToneSequence(frequencies, durations, ARRAY_SIZE(frequencies), 28);
 }
