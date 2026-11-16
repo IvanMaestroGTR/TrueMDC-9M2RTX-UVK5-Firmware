@@ -69,7 +69,7 @@ ENABLE_4732SSB =0
 
 ENABLE_DOPPLER               =0
 #############################################################
-PACKED_FILE_SUFFIX = 9M2RTX-LOSEHU
+PACKED_FILE_SUFFIX = ExSPED-HNRS125
 
 ifeq ($(ENABLE_DOPPLER),1)
 	ENABLE_SPECTRUM=1
