@@ -44,6 +44,7 @@ extern BEEP_Type_t       gBeepToPlay;
 
 void AUDIO_PlayBeep(BEEP_Type_t Beep);
 void AUDIO_PlayBootBeep(void);
+void AUDIO_PlayRxAlert(void);
 
 enum
 {
