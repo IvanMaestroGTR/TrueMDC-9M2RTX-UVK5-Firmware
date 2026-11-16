@@ -498,5 +498,5 @@ void AUDIO_PlayRxAlert(void)
     BK4819_WriteRegister(BK4819_REG_71, (uint16_t)(1174 * 10.32444));
     SYSTEM_DelayMs(40);
 
-    BK4819_TurnsOffTonesTurnsOnRX();
+    BK4819_TurnsOffTones_TurnsOnRX();
 }
