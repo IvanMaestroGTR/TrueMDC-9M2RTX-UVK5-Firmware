@@ -19,7 +19,7 @@ ENABLE_VOX                    ?= 0
 ENABLE_ALARM                  ?= 1
 ENABLE_TX1750                 ?= 0
 ENABLE_PWRON_PASSWORD         ?= 0
-ENABLE_DTMF_CALLING           ?= 1
+ENABLE_DTMF_CALLING           ?= 0
 ENABLE_FLASHLIGHT             ?= 0
 ENABLE_BOOTLOADER			 ?= 0
 # ---- CUSTOM MODS ----
